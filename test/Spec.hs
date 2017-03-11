@@ -1,7 +1,7 @@
 import Test.HUnit
 import Lib
 import qualified Data.Set as S
-
+import Data.Maybe
 
 main :: IO ()
 main = do
@@ -45,31 +45,39 @@ rookTests = testPossible "rook" possibleRookMoves impossibleRookMoves allRookMov
 bishopTests = testPossible "bishop" possibleBishopMoves impossibleBishopMoves allBishopMoves
 possibleTests = knightTests ++ rookTests ++ bishopTests
 
-allTests = possibleTests ++ mateTests
+matePositions = [["WKA1", "BQA2", "BKA3"],
+                 ["WKA1", "BRA8", "BRB8", "BKC8"]]
 
+
+nonMatePositions = [["WKA1", "BRA8", "BRB8", "BKB4"]]
+
+mateTest gs = TestCase (assertBool mateMessage (isMate gs))
+    where mateMessage = "This should be mate, but isn't: " ++ (show gs)
+
+nonMateTest gs = TestCase (assertBool mateMessage (not (isMate gs)))
+    where mateMessage = "This should not be mate, but is: " ++ (show gs)
+
+toGameState ps = GameState ps White
+mates = fmap toGameState $ catMaybes (fmap stringToPosition matePositions)
+nonMates = fmap toGameState $ catMaybes (fmap stringToPosition nonMatePositions)
+
+allNextFields = []
+
+movesTest expected ps = TestCase (assertBool errorMessage (movesCalculated == movesExpected))
+    where   movesCalculated = S.fromList $ allNextLegalMoves ps
+            movesExpected = S.fromList expected
+            errorMessage = "Position: " ++ show ps ++ " Expected: " ++ show movesExpected ++ " but got: " ++ show movesCalculated
+
+conditionHolds :: (GameState -> Bool) -> String -> GameState -> Test
+conditionHolds fn name gs = TestCase (assertBool (name ++ ": " ++ show gs) (fn gs))
+
+checkTests = fmap (conditionHolds inCheck "Should be in check, but isn't") (mates ++ nonMates)
+isCheckTests = fmap (conditionHolds (not . isChecking) "Should not be checking, but is") (mates ++ nonMates)
+
+oppMoves = fmap snd $ allOpponentMoves $ mates !! 0
+oppMoveTest = TestCase $ assertBool (show oppMoves) ((fromJust (stringToField "A1")) `elem` oppMoves)
+
+movesTests = fmap (movesTest allNextFields) mates
+mateTests = fmap mateTest mates ++ fmap nonMateTest nonMates
+allTests = possibleTests ++ movesTests ++ checkTests ++ isCheckTests ++ [oppMoveTest]
 tests = TestList allTests
-
-matePosition1 = [PieceField King White (A, R1)
-              , PieceField Queen Black (A, R2)
-              , PieceField King Black (A, R3)]
-
-matePosition2 = [PieceField King White (A, R1)
-              , PieceField Rook Black (A, R8)
-              , PieceField Rook Black (B, R8)
-              , PieceField King Black (C, R8)]
-
-nonMatePosition2 = [PieceField King White (A, R1)
-              , PieceField Rook Black (A, R8)
-              , PieceField Rook Black (B, R8)
-              , PieceField King Black (B, R4)]
-
-mateTest gs = TestCase (assertBool mateMessage (isMate mateState))
-    where mateMessage = "This should be mate: " ++ (show mateState)
-          mateState = GameState gs White
-
-nonMateTest gs = TestCase (assertBool mateMessage (not (isMate mateState)))
-    where mateMessage = "This should not be mate: " ++ (show mateState)
-          mateState = GameState gs White
-
-
-mateTests = fmap mateTest [matePosition1, matePosition2] ++ fmap nonMateTest [nonMatePosition2]
