@@ -109,16 +109,22 @@ stringToPosition = traverse stringToPieceField
 inter :: Ord a => [a] -> [a] -> S.Set a
 inter l1 l2 = S.intersection (S.fromList l1) (S.fromList l2)
 
-isJumpingPiece :: (Field -> [Field]) -> Position -> Move -> Bool
-isJumpingPiece mf ps mv = length (inter inBetweenFields pieceFields) > 0
-    where   inBetweenFields = fmap fst inBetweenMoves
-            pieceFields = fmap pfField ps
-            inBetweenMoves = fmap snd $ filter (\(m, tg) -> (moveDistance tg) < distance) movesWithTogo
-            moves = zip (repeat from) (mf from)
-            toGo = zip (repeat to) (fmap snd moves)
-            movesWithTogo = zip moves toGo
-            distance = moveDistance mv
-            (from, to) = mv
+-- isJumpingPiece :: (Field -> [Field]) -> Position -> Move -> Bool
+-- isJumpingPiece mf ps mv = length (inter inBetweenFields pieceFields) > 0
+--     where   inBetweenFields = fmap fst inBetweenMoves
+--             pieceFields = fmap pfField ps
+--             inBetweenMoves = fmap snd $ filter (\(m, tg) -> (moveDistance tg) < distance) movesWithTogo
+--             moves = zip (repeat from) (mf from)
+--             toGo = zip (repeat to) (fmap snd moves)
+--             movesWithTogo = zip moves toGo
+--             distance = moveDistance mv
+--             (from, to) = mv
+-- isJumping :: Piece -> Position -> Move -> Bool
+-- isJumping Rook = isJumpingPiece rookMoves
+-- isJumping Bishop = isJumpingPiece bishopMoves
+-- isJumping Queen = isJumpingPiece queenMoves
+-- isJumping _ = \ps mv -> False
+
 
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
@@ -126,12 +132,6 @@ moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
 
 fieldToInt :: Field -> (Int, Int)
 fieldToInt (c, r) = (columnInt c, rowInt r)
-
-isJumping :: Piece -> Position -> Move -> Bool
-isJumping Rook = isJumpingPiece rookMoves
-isJumping Bishop = isJumpingPiece bishopMoves
-isJumping Queen = isJumpingPiece queenMoves
-isJumping _ = \ps mv -> False
 
 
 getPositions :: GameState -> Piece -> [Field]
@@ -184,16 +184,17 @@ type MoveDirections = [Move]
 
 allPiecePhysicalMoves :: GameState -> PieceField -> [Move]
 allPiecePhysicalMoves gs pf = goodMoves
-    where moves = (pieceMoves piece field) :: [[Field]]
-          goodMoves = concat $ fmap (takeWhile isGood) moves
-          isGood f = not $ f `elem` (ownPieceFields gs)
+    where fields = (pieceFields piece field) :: [[Field]]
+          goodFields = (concat $ fmap (takeWhile isGood) fields) :: [Field]
+          goodMoves = zip (repeat field) goodFields
+          isGood f = not $ f `elem` (fmap pfField (ownPieceFields gs))
           piece = pfPiece pf
           field = pfField pf
           position = gsPosition gs
           color = gsColor gs
 
-ownPieceFields :: GameState -> [Field]
-ownPieceFields gs = fmap pfField $ filter (\pf -> (pfColor pf) == (gsColor gs)) (gsPosition gs)
+ownPieceFields :: GameState -> [PieceField]
+ownPieceFields gs = filter (\pf -> (pfColor pf) == (gsColor gs)) (gsPosition gs)
 
 allPhysicalMoves :: GameState -> [Move]
 allPhysicalMoves gs = concat $ fmap (allPiecePhysicalMoves gs) (ownPieceFields gs)
@@ -201,7 +202,7 @@ allPhysicalMoves gs = concat $ fmap (allPiecePhysicalMoves gs) (ownPieceFields g
 -- allNextPhysicalMovesList :: GameState -> [[Move]]
 -- allNextPhysicalMovesList gs = do 
 --     pf <- gsPosition gs
---     let targetFields = pieceMoves (pfPiece pf) (pfField pf)
+--     let targetFields = pieceFields (pfPiece pf) (pfField pf)
 --     let currentField = pfField pf
 --     guard (gsColor gs == pfColor pf)
 --     let moves = zip (repeat currentField) targetFields
@@ -233,36 +234,31 @@ maybeFromCondition :: a -> Bool -> Maybe a
 maybeFromCondition _ False = Nothing
 maybeFromCondition a _ = Just a
 
-rookSteps = [zip [-1..(-7)] (repeat 0), zip [1..7] (repeat 0), zip (repeat 0) [-1..(-7)], zip (repeat 0) [1..7]]
+range :: Bool -> [Int]
+range True = [1..7]
+range False = reverse [(-7)..(-1)]
+
+rangeT = range True
+rangeF = range False
+
+rookSteps = [zip rangeF (repeat 0), zip rangeT (repeat 0), zip (repeat 0) rangeF, zip (repeat 0) rangeT]
 knightSteps = fmap (:[]) $ ([(sc, sr) | sc <- [-2, -1, 1, 2], sr <- [-2, -1, 1, 2], abs(sc) + abs(sr) == 3])
-bishopSteps = [zip [-1..(-7)] [1..7], zip [1..7] [1..7], zip [(-1)..(-7)] [(-1)..(-7)], zip [1..7] [(-1)..(-7)]]
+bishopSteps = [zip rangeF rangeT, zip rangeT rangeT, zip rangeF rangeF, zip rangeT rangeF]
 queenSteps = rookSteps ++ bishopSteps
 kingSteps = fmap (:[]) $ [(sc, sr) | sc <- [-1..1], sr <- [-1..1], abs(sc) + abs(sr) > 0]
-
 
 movesFromSteps :: [[(Int, Int)]] -> Field -> [[Field]]
 movesFromSteps steps sf = (fmap catMaybes) $ (fmap . fmap) (fieldStep sf) steps
 
+pieceFields :: Piece -> Field -> [[Field]]
+pieceFields Queen = movesFromSteps queenSteps
+pieceFields Knight = movesFromSteps knightSteps
+pieceFields Bishop = movesFromSteps bishopSteps
+pieceFields Rook = movesFromSteps rookSteps
+pieceFields King = movesFromSteps kingSteps
 
--- rookSteps = [(sc, sr) | sc <- [-7..7], sr <- [-7..7], abs(sc) + abs(sr) > 0, (sc == 0) || (sr == 0)]
--- bishopSteps = [(sc, sr) | sc <- [-7..7], sr <- [-7..7], abs(sc) + abs(sr) > 0, abs(sc) == abs(sr)]
--- queenMoves sf = rookMoves sf ++ bishopMoves sf
-
-rookMoves = movesFromSteps rookSteps
-knightMoves = movesFromSteps knightSteps
-bishopMoves = movesFromSteps bishopSteps
-kingMoves = movesFromSteps kingSteps
-queenMoves = movesFromSteps queenSteps
-
-pieceMoves :: Piece -> Field -> [[Field]]
-pieceMoves Queen = queenMoves
-pieceMoves Knight = knightMoves
-pieceMoves Bishop = bishopMoves
-pieceMoves Rook = rookMoves
-pieceMoves King = kingMoves
-
-foo :: Int -> (Int, Int)
-foo _ = (1, 2)
+allPieceFields :: Piece -> Field -> [Field]
+allPieceFields pc f = concat $ pieceFields pc f
 
 -- A safe version of (!!) that returns Nothing if the position doesn't exist
 index :: Int -> [a] -> Maybe a
@@ -273,3 +269,5 @@ index i (_ : xs) = index (i - 1) xs
 testPS = fromJust $ stringToPosition ["WKA1", "BRA8", "BRB8", "BKC8"]
 testGS = GameState testPS White
 testGS2 = GameState testPS Black
+
+

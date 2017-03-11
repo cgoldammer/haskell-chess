@@ -8,23 +8,20 @@ main = do
     runTestTT tests
     return ()
 
-test1 = TestCase (assertEqual "fsdfsd" (1,3) (Lib.foo 2))
-
-
 rookPosition = (A, R1)
 possibleRookMoves = [(A, R2), (A, R7), (B, R1), (H, R1)]
 impossibleRookMoves = [(A, R1), (B, R2)]
-allRookMoves = rookMoves rookPosition
+allRookMoves = allPieceFields Rook rookPosition
 
 knightPosition = (A, R1)
 possibleKnightMoves = [(B, R3), (C, R2)]
 impossibleKnightMoves = [(A, R1), (B, R2)]
-allKnightMoves = knightMoves knightPosition
+allKnightMoves = allPieceFields Knight knightPosition
 
 bishopPosition = (B, R2)
 possibleBishopMoves = [(A, R1), (C, R3), (C, R1), (H, R8)]
 impossibleBishopMoves = [(B, R1), (B, R2)]
-allBishopMoves = bishopMoves bishopPosition
+allBishopMoves = allPieceFields Bishop bishopPosition
 
 intersect :: Ord a => [a] -> [a] -> S.Set a
 intersect l1 l2 = S.intersection (S.fromList l1) (S.fromList l2)
@@ -44,6 +41,7 @@ knightTests = testPossible "knight" possibleKnightMoves impossibleKnightMoves al
 rookTests = testPossible "rook" possibleRookMoves impossibleRookMoves allRookMoves
 bishopTests = testPossible "bishop" possibleBishopMoves impossibleBishopMoves allBishopMoves
 possibleTests = knightTests ++ rookTests ++ bishopTests
+
 
 matePositions = [["WKA1", "BQA2", "BKA3"],
                  ["WKA1", "BRA8", "BRB8", "BKC8"]]
@@ -79,5 +77,5 @@ oppMoveTest = TestCase $ assertBool (show oppMoves) ((fromJust (stringToField "A
 
 movesTests = fmap (movesTest allNextFields) mates
 mateTests = fmap mateTest mates ++ fmap nonMateTest nonMates
-allTests = possibleTests ++ movesTests ++ checkTests ++ isCheckTests ++ [oppMoveTest]
+allTests = possibleTests ++ movesTests ++ [oppMoveTest] ++ checkTests ++ isCheckTests ++ mateTests
 tests = TestList allTests
