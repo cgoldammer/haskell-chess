@@ -29,10 +29,12 @@ import Data.List
 -- Castling
 
 
+type CastlingRights = ((Bool, Bool), (Bool, Bool))
+
 data GameState = GameState {
       gsPosition :: Position
     , gsColor :: Color
-    , castlingRights :: ((Bool, Bool), (Bool, Bool))
+    , castlingRights :: CastlingRights
     , enPassantTarget :: Maybe Field
     , halfMove :: Int
     , fullMove :: Int} deriving (Eq, Show)
@@ -40,18 +42,62 @@ data GameState = GameState {
 defaultGameState :: Position -> Color -> GameState
 defaultGameState ps color = GameState ps color ((False, False), (False, False)) Nothing 0 1
 
+movePiece :: GameState -> Move -> Piece
+movePiece gs (Move from to _) = pfPiece $ (selectByPosition (gsPosition gs) [from] !! 0)
+
+maybeMovePiece :: GameState -> Move -> Maybe Piece
+maybeMovePiece gs (Move from to _) = fmap pfPiece $ index 0 (selectByPosition (gsPosition gs) [from])
+
 move :: GameState -> Move -> GameState
-move gs (Move from to promotion) = GameState newPosition newColor cr ept hm fm
+move gs mv@(Move from to promotion) = GameState newPosition newColor newCr newEp hm fm
     where   newColor = invertColor oldColor
             oldColor = gsColor gs
             oldPosition = gsPosition gs
             removePosition = filter (\pf -> not (elem (pfField pf) [from, to])) oldPosition
-            movedPiece = pfPiece $ (selectByPosition oldPosition [from] !! 0)
+            movedPiece = movePiece gs mv
             newPosition = removePosition ++ [PieceField movedPiece oldColor to]
             cr = castlingRights gs
             ept = enPassantTarget gs
             hm = halfMove gs
             fm = fullMove gs
+            newCr = updateCastlingRights gs mv
+            newEp = updateEnPassant gs mv
+
+updateEnPassant :: GameState -> Move -> Maybe Field
+updateEnPassant gs mv@(Move from to _)
+    | pawnMovedTwo = beforeField 
+    | otherwise = Nothing
+    where
+        pawnMovedTwo = movedPawn && distance == 2
+        movedPawn = maybeMovePiece gs mv == Just Pawn
+        distance = moveDistance (from, to)
+        (fromC, fromR) = from
+        beforeRow = nextRow fromR (gsColor gs)
+        beforeField = sequence (fromC, beforeRow)
+
+nextRow :: Row -> Color -> Maybe Row
+nextRow r White = intRow $ (rowInt r) + 1
+nextRow r Black = intRow $ (rowInt r) - 1
+
+updateCastlingRights :: GameState -> Move -> CastlingRights
+updateCastlingRights gs mv = updatedBothRights where
+    updatedRights = (castleK && (not castleKLost), castleQ && (not castleQLost))
+    castleWhite = fst cr
+    castleBlack = snd cr
+    cr = castlingRights gs
+    (castleK, castleQ) = rights
+    rights 
+        | color == White = castleWhite
+        | color == Black = castleBlack
+    castleKLost = kingMoved || kingRookMoved
+    castleQLost = kingMoved || queenRookMoved
+    updatedBothRights
+        | color == White = (updatedRights, castleBlack)
+        | color == Black = (castleWhite, updatedRights)
+    kingMoved = movePiece gs mv == King
+    color = gsColor gs
+    queenRookMoved = moveFrom mv == (A, R1)
+    kingRookMoved = moveFrom mv == (H, R1)
 
 allNextLegalMoves :: GameState -> [Move]
 allNextLegalMoves gs = filter notInCheck (allPhysicalMoves gs)
