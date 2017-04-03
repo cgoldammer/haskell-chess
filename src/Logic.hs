@@ -4,6 +4,7 @@
 
 module Logic (allPhysicalMoves
             , GameState (GameState, gsPosition)
+            , defaultGameState
             , getPositions
             , invertGameStateColor
             , allNextLegalMoves
@@ -12,6 +13,9 @@ module Logic (allPhysicalMoves
             , basicFen
             , fullFen
             , isChecking
+            , inCheck
+            , pieceFields
+            , allOpponentMoves
             ) where
 
 import Data.Maybe
@@ -32,6 +36,9 @@ data GameState = GameState {
     , enPassantTarget :: Maybe Field
     , halfMove :: Int
     , fullMove :: Int} deriving (Eq, Show)
+
+defaultGameState :: Position -> Color -> GameState
+defaultGameState ps color = GameState ps color ((False, False), (False, False)) Nothing 0 1
 
 move :: GameState -> Move -> GameState
 move gs (Move from to promotion) = GameState newPosition newColor cr ept hm fm
@@ -80,7 +87,8 @@ allPiecePhysicalMoves gs pf = goodMoves ++ castMoves
           castMoves = fmap normalMove $ castlingMoves gs
           goodFields = (concat $ fmap (takeWhile isGood) fields) :: [Field]
           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
-          goodMoves = concat $ fmap (addSpecialMoves piece) goodMoveFields
+          goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
+          goodMoves = concat $ fmap (addSpecialMoves piece) goodMoveFilterPawn
           isGood f = not $ f `elem` (fmap pfField (ownPieceFields gs))
           piece = pfPiece pf
           field = pfField pf
@@ -88,23 +96,29 @@ allPiecePhysicalMoves gs pf = goodMoves ++ castMoves
           color = gsColor gs
 
 
+filterPawnMoves :: GameState -> Piece -> [MoveLocation] -> [MoveLocation]
+filterPawnMoves gs Pawn ml = filter (isLegalPawnMove gs) ml
+filterPawnMoves _ _ ml = ml
+
 normalMove :: MoveLocation -> Move
 normalMove (from, to) = Move from to Nothing
 
 isLegalPawnMove :: GameState -> MoveLocation -> Bool
-isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || (isGoingSideways && (isTaking || isEP))
+isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || (isGoingSideways && (taking || isEP))
     where   isGoingForward = (fst from == fst to) 
             isGoingSideways = (fst from /= fst to)
-            isTaking = to `elem` (fmap pfField (opponentPieceFields gs))
-            notTaking = not isTaking
+            taking = isTaking gs to
+            notTaking = not taking
             isEP = isEnPassant gs ml
 
+isTaking :: GameState -> Field -> Bool
+isTaking gs to = to `elem` (fmap pfField (opponentPieceFields gs))
 
 freeForCastling gs = [canCastleKingSide gs, canCastleQueenSide gs]
 
 castlingMoves gs
     | gsColor gs == White = [((E, R1), (G, R1)), ((E, R1), (E, R1))]
-    | gsColor gs == White = [((E, R8), (G, R8)), ((E, R8), (E, R8))]
+    | gsColor gs == Black = [((E, R8), (G, R8)), ((E, R8), (E, R8))]
     
 possibleCastlingMoves :: GameState -> [MoveLocation]
 possibleCastlingMoves gs = catMaybes [useValueIfCondition m c | (m, c) <- zip (castlingMoves gs) (freeForCastling gs)]
@@ -204,15 +218,15 @@ pieceFields (PieceField Queen _ field) = movesFromSteps queenSteps field
 pieceFields (PieceField Rook _ field) = movesFromSteps rookSteps field
 pieceFields (PieceField Bishop _ field) = movesFromSteps bishopSteps field
 pieceFields (PieceField Knight _ field) = movesFromSteps knightSteps field
-pieceFields (PieceField Pawn color field) = movesFromSteps ([pawnSteps field color]) field
+pieceFields (PieceField Pawn color field) = movesFromSteps (pawnSteps field color) field
 
-pawnSteps :: Field -> Color -> [StepMove]
+pawnSteps :: Field -> Color -> [[StepMove]]
 pawnSteps (_, R1) _ = []
 pawnSteps (_, R8) _ = []
-pawnSteps (_, R2) White = [(-1, 1), (0, 1), (0, 2), (1, -1)]
-pawnSteps _ White = [(-1, 1), (0, 1), (1,1)]
-pawnSteps (_, R7) Black = [(-1, -1), (0, -1), (0, -2), (1,- 1)]
-pawnSteps _ Black = [(-1, -1), (0, -1), (1, -1)]
+pawnSteps (_, R2) White = [[(-1, 1)], [(0, 1), (0, 2)], [(1, -1)]]
+pawnSteps _ White = [[(-1, 1)], [(0, 1)], [(1,1)]]
+pawnSteps (_, R7) Black = [[(-1, -1)], [(0, -1), (0, -2)], [(1,- 1)]]
+pawnSteps _ Black = [[(-1, -1)], [(0, -1)], [(1, -1)]]
 
 allPieceFields :: PieceField -> [Field]
 allPieceFields = concat . pieceFields

@@ -62,6 +62,7 @@ shortPiece King = "K"
 shortPiece Queen = "Q"
 shortPiece Rook = "R"
 shortPiece Bishop = "B"
+shortPiece Pawn = "P"
 
 shortColumn :: Column -> String
 shortColumn c = [['A'..'H'] !! (columnInt c)]
@@ -103,6 +104,7 @@ stringToPiece "R" = Just Rook
 stringToPiece "B" = Just Bishop
 stringToPiece "Q" = Just Queen
 stringToPiece "N" = Just Knight
+stringToPiece "P" = Just Pawn
 stringToPiece _ = Nothing
 
 colorString :: String -> Maybe Color
