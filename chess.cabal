@@ -5,9 +5,9 @@ version:             0.1.0.0
 homepage:            https://github.com/githubuser/chess#readme
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
+author:              Chris Goldammer
+maintainer:          goldammer.christian@gmail.com
+copyright:           2017 Chris Goldammer
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
@@ -41,18 +41,18 @@ executable chess-exe
   build-depends:       base
                      , chess
   default-language:    Haskell2010
--- 
--- test-suite chess-test
---   type:                exitcode-stdio-1.0
---   hs-source-dirs:      test
---   main-is:             Spec.hs
---   build-depends:       base
---                      , chess
---                      , HUnit
---                      , containers
---   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
---   default-language:    Haskell2010
--- 
+
+test-suite chess-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , chess
+                     , HUnit
+                     , containers
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
 source-repository head
   type:     git
   location: https://github.com/githubuser/chess
