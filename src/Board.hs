@@ -20,6 +20,7 @@ module Board (stringToPosition
             , Row (R1, R2, R3, R4, R5, R6, R7, R8)
             , Move (Move, moveFrom, moveTo, movePromotionPiece)
             , MoveLocation
+            , fieldColor
             , allPieces, allFullPieces, allNonKingPieces, allNonKingFullPieces, allNonPawnPieces
         ) where 
 
@@ -50,6 +51,12 @@ data Move = Move {moveFrom :: Field, moveTo :: Field, movePromotionPiece :: Mayb
 type MoveLocation = (Field, Field)
 data PieceField = PieceField {pfPiece :: Piece, pfColor :: Color, pfField :: Field} deriving (Eq)
 type Position = [PieceField]
+
+fieldColor :: Field -> Color
+fieldColor (c, r) 
+    | isEven (rowInt r + columnInt c) = White
+    | otherwise = Black
+    where isEven i = mod i 2 == 0
 
 
 shortColor :: Color -> String

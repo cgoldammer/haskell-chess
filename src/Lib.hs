@@ -49,8 +49,7 @@ runChess = do
     print $ encode printable
     let enc = (encode printable) :: La.ByteString
     let s = U.toString enc
-    -- Tu.output "/home/cg/haskell/chess/js/mates.json" "hi"
-    writeFile "/home/cg/haskell/projects/chess/js/mates.json" s
+    writeFile "/home/cg/data/output/mates.json" s
     return ()
 
 -- Todo;
@@ -82,13 +81,14 @@ type Fen = String
 
 mateFinder :: Fen -> IO [MateMove]
 mateFinder f = do
-    Tu.cd "/home/cg/haskell/projects/chess/stock/tests"
+    Tu.cd "/home/cg/haskell-chess/scripts/"
     Tu.shell (Te.pack $ "./bestmoves.sh \"" ++ f ++ "\"") empty
     moves <- readResults
     return moves
 
 readResults :: IO [MateMove]
 readResults = do
+    Tu.cd "/home/cg/haskell-chess/scripts/"
     results :: Te.Text <- Tu.strict $ Tu.input "./results.txt"
     let mates = getMates (Te.splitOn "\n" results)
     return mates
@@ -102,6 +102,7 @@ pickMateMoves (Right (pv, num , [fR, fC, tR, tC])) = Just (Move from to Nothing,
     where   from = fromJust $ stringToField ([fR, fC])
             to = fromJust $ stringToField ([tR, tC])
 pickMateMoves (Left _) = Nothing
+pickMateMoves (Right (pv, num , _)) = Nothing
 
 lineParse :: Parser (Int, Int, String)
 lineParse = do
