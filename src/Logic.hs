@@ -20,6 +20,7 @@ module Logic (allPhysicalMoves
 
 import Data.Maybe
 import Board
+import Control.Monad
 import qualified Data.String.Utils as SU
 import qualified Data.Char as C
 import Helpers
@@ -71,9 +72,9 @@ updateEnPassant gs mv@(Move from to _)
         pawnMovedTwo = movedPawn && distance == 2
         movedPawn = maybeMovePiece gs mv == Just Pawn
         distance = moveDistance (from, to)
-        (fromC, fromR) = from
+        (Field fromC fromR) = from
         beforeRow = nextRow fromR (gsColor gs)
-        beforeField = sequence (fromC, beforeRow)
+        beforeField = liftM2 Field (Just fromC) beforeRow
 
 nextRow :: Row -> Color -> Maybe Row
 nextRow r White = intRow $ (rowInt r) + 1
@@ -96,8 +97,8 @@ updateCastlingRights gs mv = updatedBothRights where
         | color == Black = (castleWhite, updatedRights)
     kingMoved = movePiece gs mv == King
     color = gsColor gs
-    queenRookMoved = moveFrom mv == (A, R1)
-    kingRookMoved = moveFrom mv == (H, R1)
+    queenRookMoved = moveFrom mv == Field A R1
+    kingRookMoved = moveFrom mv == Field H R1
 
 allNextLegalMoves :: GameState -> [Move]
 allNextLegalMoves gs = filter notInCheck (allPhysicalMoves gs)
@@ -151,8 +152,8 @@ normalMove (from, to) = Move from to Nothing
 
 isLegalPawnMove :: GameState -> MoveLocation -> Bool
 isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || (isGoingSideways && (taking || isEP))
-    where   isGoingForward = (fst from == fst to) 
-            isGoingSideways = (fst from /= fst to)
+    where   isGoingForward = (fieldColumn from == fieldColumn to) 
+            isGoingSideways = (fieldColumn from /= fieldColumn to)
             taking = isTaking gs to
             notTaking = not taking
             isEP = isEnPassant gs ml
@@ -163,8 +164,8 @@ isTaking gs to = to `elem` (fmap pfField (opponentPieceFields gs))
 freeForCastling gs = [canCastleKingSide gs, canCastleQueenSide gs]
 
 castlingMoves gs
-    | gsColor gs == White = [((E, R1), (G, R1)), ((E, R1), (E, R1))]
-    | gsColor gs == Black = [((E, R8), (G, R8)), ((E, R8), (E, R8))]
+    | gsColor gs == White = [(Field E R1, Field G R1), (Field E R1, Field E R1)]
+    | gsColor gs == Black = [(Field E R8, Field G R8), (Field E R8, Field E R8)]
     
 possibleCastlingMoves :: GameState -> [MoveLocation]
 possibleCastlingMoves gs = catMaybes [useValueIfCondition m c | (m, c) <- zip (castlingMoves gs) (freeForCastling gs)]
@@ -178,14 +179,14 @@ notInCheck = not . inCheck
 canCastleKingSide :: GameState -> Bool
 canCastleKingSide (GameState pos White ((False, _), _)  _ _ _) = False
 canCastleKingSide (GameState pos Black ((_, False), _)  _ _ _) = False
-canCastleKingSide gs@(GameState pos White ((True, _), _)  _ _ _) = (notInCheck gs) && (castlingFree gs [(F, R1), (G, R1)])
-canCastleKingSide gs@(GameState pos Black ((_, True), _)  _ _ _) = (notInCheck gs) && (castlingFree gs [(F, R8), (G, R8)])
+canCastleKingSide gs@(GameState pos White ((True, _), _)  _ _ _) = (notInCheck gs) && (castlingFree gs [(Field F R1), (Field G R1)])
+canCastleKingSide gs@(GameState pos Black ((_, True), _)  _ _ _) = (notInCheck gs) && (castlingFree gs [(Field F R8), (Field G R8)])
 
 canCastleQueenSide :: GameState -> Bool
 canCastleQueenSide gs@(GameState pos White (_, (False, _))  _ _ _) = False
 canCastleQueenSide gs@(GameState pos Black (_, (_, False))  _ _ _) = False
-canCastleQueenSide gs@(GameState pos White (_, (True, _))  _ _ _) = (notInCheck gs) && (castlingFree gs [(D, R1), (C, R1), (B, R1)])
-canCastleQueenSide gs@(GameState pos Black (_, (_, True))  _ _ _) = (notInCheck gs) && (castlingFree gs [(D, R8), (C, R8), (B, R8)])
+canCastleQueenSide gs@(GameState pos White (_, (True, _))  _ _ _) = (notInCheck gs) && (castlingFree gs [(Field D R1), (Field C R1), (Field B R1)])
+canCastleQueenSide gs@(GameState pos Black (_, (_, True))  _ _ _) = (notInCheck gs) && (castlingFree gs [(Field D R8), (Field C R8), (Field B R8)])
 
 notCheckedOn :: GameState -> Field -> Bool
 notCheckedOn = undefined
@@ -209,7 +210,7 @@ isEnPassant gs ml@(from, to) = enPassantTarget gs == Just to
 
 
 addSpecialMoves :: Piece -> MoveLocation -> [Move]
-addSpecialMoves Pawn ml@((_, R7), _) = addPromotionMoves ml
+addSpecialMoves Pawn ml@((Field _ R7), _) = addPromotionMoves ml
 addSpecialMoves _ ml@((from, to)) = [Move from to Nothing]
 
 addPromotionMoves :: MoveLocation -> [Move]
@@ -228,7 +229,7 @@ allPhysicalMoves :: GameState -> [Move]
 allPhysicalMoves gs = concat $ fmap (allPiecePhysicalMoves gs) (ownPieceFields gs)
 
 fieldStep :: Field -> (Int, Int) -> Maybe Field
-fieldStep (c, r) (x, y) = maybeFromCondition (newCol, newRow) allLegit
+fieldStep (Field c r) (x, y) = maybeFromCondition (Field newCol newRow) allLegit
     where   cInt = columnInt c
             rInt = rowInt r
             newX = (cInt + x)
@@ -267,11 +268,11 @@ pieceFields (PieceField Knight _ field) = movesFromSteps knightSteps field
 pieceFields (PieceField Pawn color field) = movesFromSteps (pawnSteps field color) field
 
 pawnSteps :: Field -> Color -> [[StepMove]]
-pawnSteps (_, R1) _ = []
-pawnSteps (_, R8) _ = []
-pawnSteps (_, R2) White = [[(-1, 1)], [(0, 1), (0, 2)], [(1, -1)]]
-pawnSteps _ White = [[(-1, 1)], [(0, 1)], [(1,1)]]
-pawnSteps (_, R7) Black = [[(-1, -1)], [(0, -1), (0, -2)], [(1,- 1)]]
+pawnSteps (Field _ R1) _ = []
+pawnSteps (Field _ R8) _ = []
+pawnSteps (Field _ R2) White = [[(-1, 1)], [(0, 1), (0, 2)], [(1, -1)]]
+pawnSteps (Field _ _) White = [[(-1, 1)], [(0, 1)], [(1,1)]]
+pawnSteps (Field _ R7) Black = [[(-1, -1)], [(0, -1), (0, -2)], [(1,- 1)]]
 pawnSteps _ Black = [[(-1, -1)], [(0, -1)], [(1, -1)]]
 
 allPieceFields :: PieceField -> [Field]
@@ -317,10 +318,10 @@ aggregateFen :: Int -> String -> String
 aggregateFen i = SU.replace (take i (repeat '1')) (show i)
 
 piecesOnRow :: Position -> Row -> Position
-piecesOnRow ps r = filter (\pf -> snd (pfField pf) == r) ps
+piecesOnRow ps r = filter (\pf -> fieldRow (pfField pf) == r) ps
 
 firstPieceOnColumn :: Position -> Column -> Maybe PieceField
-firstPieceOnColumn ps c = index 0 (filter (\pf -> fst (pfField pf) == c) ps)
+firstPieceOnColumn ps c = index 0 (filter (\pf -> fieldColumn (pfField pf) == c) ps)
 
 positionByRow :: Position -> [Position]
 positionByRow ps = fmap (piecesOnRow ps) (reverse allRows)

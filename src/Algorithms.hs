@@ -56,20 +56,21 @@ blackPiecePositions :: Piece -> GameState -> [Field]
 blackPiecePositions pc gs = getPositions (invertGameStateColor gs) pc
 
 legalPosition :: GameState -> Bool
-legalPosition = bothSidesOneKing && noDuplicatedFields && notChecking
+legalPosition gs = bothSidesOneKing && noDuplicatedFields && notChecking
     where   whiteKingPositions = whitePiecePositions King gs
             blackKingPositions = blackPiecePositions King gs
             hasWhiteKing = (length whiteKingPositions) == 1
             hasBlackKing = (length blackKingPositions) == 1
             bothSidesOneKing = hasWhiteKing && hasBlackKing
             notChecking = not $ isChecking gs
-
-sensiblePosition :: GameState -> Bool
-sensiblePosition = maxLightPieceCount == 2 && length queens == 1 && not duplicatedColors
-  where     apf = fmap pfField (gsPosition gs) :: [Field]
             numberDistinctFields = length $ Un.count apf
+            apf = fmap pfField (gsPosition gs) :: [Field]
             numberFields = length apf
             noDuplicatedFields = numberDistinctFields == numberFields
+
+sensiblePosition :: GameState -> Bool
+sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not duplicatedColors
+  where     
             lightPieceCount = fmap (length . getPositions gs) lightPieces
             maxLightPieceCount = maximum lightPieceCount
             bishops = getPositions gs Bishop
@@ -83,7 +84,6 @@ goodPosition = liftM2 (&&) legalPosition sensiblePosition
 lightPieces = [Rook, Bishop, Knight]
 
 
-            
 randomPiece :: (RandomGen g) => Rand g PieceField
 randomPiece = do 
     pos <- getRandomR (0, (length allPieceFields) - 1)
@@ -98,32 +98,26 @@ nextRandomGameState = do
     let gs = GameState position White ((False, False), (False, False)) Nothing 0 1
     return gs
 
-
 randomPositions :: Int -> IO [GameState]
 randomPositions n = sequence (replicate n nextRandomGameState)
 
 randomGood :: Int -> IO [GameState]
-randomGood n = do
-    pos <- randomPositions n
-    let legit = filter goodPosition pos
-    return legit
+randomGood = fmap (filter goodPosition) . randomPositions
 
-
-mateInTwo = gsFromString ["WKA1", "BKH7", "WRB6", "WRC3"]
+gsFromString s = GameState (fromJust (stringToPosition s)) White
 
 pawnOnBadRow :: Piece -> Row -> Bool
 pawnOnBadRow Pawn R1 = True
 pawnOnBadRow Pawn R8 = True
 pawnOnBadRow _ _ = False
 
-gsFromString s = GameState (fromJust (stringToPosition s)) White
-allPieceFieldsWhite = [PieceField piece White (col, row) | piece <- allPieces, col <- allColumns, row <- allRows, not (pawnOnBadRow piece row)]
-allPieceFieldsBlack = [PieceField piece Black (col, row) | piece <- allPieces, col <- allColumns, row <- allRows, not (pawnOnBadRow piece row)]
-allPieceFields = allPieceFieldsWhite ++ allPieceFieldsBlack
-allFields = [(col, row) | col <- allColumns, row <- allRows]
+piecesAndFields = [(piece, Field col row) | piece <- allPieces, col <- allColumns, row <- allRows, not (pawnOnBadRow piece row)]
+turnIntoPieceField color = \(piece, Field col row) -> PieceField piece color (Field col row)
+allPieceFields = (fmap (turnIntoPieceField White) piecesAndFields) ++ (fmap (turnIntoPieceField Black) piecesAndFields)
+allFields = [Field col row | col <- allColumns, row <- allRows]
 
-strings = [ ["WKA1", "WQA2", "WRA7", "WRB6", "BKH8"],
-            ["WKA1", "WQA3", "WQA4", "WRA7", "WRB6", "BKH8"]]
+
+
             
 
 

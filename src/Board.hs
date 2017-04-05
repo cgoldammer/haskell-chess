@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleInstances, OverlappingInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
 module Board (stringToPosition
             , Piece (..)
-            , Field
+            , Field (Field, fieldColumn, fieldRow)
             , Position
             , Color (White, Black)
             , PieceField (PieceField, pfField, pfColor, pfPiece)
@@ -43,21 +43,19 @@ allNonKingPieces = [Queen ..]
 allNonKingFullPieces = [Queen .. Knight]
 allNonPawnPieces = [King .. Knight]
 
-
 data Color = White | Black deriving (Enum, Ord, Eq)
 
-type Field = (Column, Row)
+data Field = Field { fieldColumn :: Column, fieldRow :: Row } deriving (Eq, Ord)
 data Move = Move {moveFrom :: Field, moveTo :: Field, movePromotionPiece :: Maybe Piece} deriving (Eq, Show, Ord)
 type MoveLocation = (Field, Field)
 data PieceField = PieceField {pfPiece :: Piece, pfColor :: Color, pfField :: Field} deriving (Eq)
 type Position = [PieceField]
 
 fieldColor :: Field -> Color
-fieldColor (c, r) 
-    | isEven (rowInt r + columnInt c) = White
-    | otherwise = Black
+fieldColor (Field c r)
+    | isEven (rowInt r + columnInt c) = Black -- E.g. (A, 1) has positions 1+1=2 and is black
+    | otherwise = White
     where isEven i = mod i 2 == 0
-
 
 shortColor :: Color -> String
 shortColor White = "W"
@@ -78,7 +76,7 @@ shortRow :: Row -> String
 shortRow r = show $ rowInt r
 
 shortField :: Field -> String
-shortField (c, r) = shortColumn c ++ shortRow r
+shortField (Field c r) = shortColumn c ++ shortRow r
 
 instance Show Color where
     show = shortColor
@@ -93,7 +91,7 @@ instance Show Column where
     show = shortColumn
 
 instance Show Field where
-    show (c, r) = show c ++ show r
+    show (Field c r) = show c ++ show r
 
 instance Show PieceField where
     show (PieceField p c f) = show c ++ show p ++ show f
@@ -119,14 +117,13 @@ colorString "W" = Just White
 colorString "B" = Just Black
 colorString _ = Nothing
 
-sequence2Tuple = uncurry $ liftM2 (,)
-
 stringToField :: String -> Maybe Field
-stringToField [c, r] = sequence2Tuple (charColumn c, join (fmap intRow (readMaybe [r])))
+stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe [r])))
+stringToField _ = Nothing
 
 stringToPieceField :: String -> Maybe PieceField 
 stringToPieceField [colS, pieceS, cS, rS]
-    | allPresent = Just $ PieceField (fromJust piece) (fromJust col) ((fromJust c), (fromJust r))
+    | allPresent = Just $ PieceField (fromJust piece) (fromJust col) (Field (fromJust c) (fromJust r))
     | otherwise = Nothing
     where   col = colorString [colS]
             piece = stringToPiece [pieceS]
@@ -138,7 +135,7 @@ stringToPosition :: [String] -> Maybe Position
 stringToPosition = traverse stringToPieceField
 
 fieldToInt :: Field -> (Int, Int)
-fieldToInt (c, r) = (columnInt c, rowInt r)
+fieldToInt (Field c r) = (columnInt c, rowInt r)
 
 invertColor White = Black
 invertColor Black = White
