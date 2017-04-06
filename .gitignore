@@ -1,3 +1,4 @@
 .chess.*
 .stack*
 *.sw*
+scripts/results.txt

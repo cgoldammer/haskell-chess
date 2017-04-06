@@ -129,26 +129,22 @@ isChecking = inCheck . invertGameStateColor
 type MoveDirections = [Move]
 
 allPiecePhysicalMoves :: GameState -> PieceField -> [Move]
-allPiecePhysicalMoves gs pf = goodMoves ++ castMoves
+allPiecePhysicalMoves gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = goodMoves ++ castMoves
     where fields = pieceFields pf
-          castMoves = fmap normalMove $ castlingMoves gs
-          goodFields = (concat $ fmap (takeWhile isGood) fields) :: [Field]
+          castMoves = fmap nonPawnMove $ castlingMoves gs
+          goodFields = concat $ fmap (takeWhile isGood) fields
           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
           goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
           goodMoves = concat $ fmap (addSpecialMoves piece) goodMoveFilterPawn
           isGood f = not $ f `elem` (fmap pfField (ownPieceFields gs))
-          piece = pfPiece pf
-          field = pfField pf
-          position = gsPosition gs
-          color = gsColor gs
 
 
 filterPawnMoves :: GameState -> Piece -> [MoveLocation] -> [MoveLocation]
 filterPawnMoves gs Pawn ml = filter (isLegalPawnMove gs) ml
 filterPawnMoves _ _ ml = ml
 
-normalMove :: MoveLocation -> Move
-normalMove (from, to) = Move from to Nothing
+nonPawnMove :: MoveLocation -> Move
+nonPawnMove (from, to) = Move from to Nothing
 
 isLegalPawnMove :: GameState -> MoveLocation -> Bool
 isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || (isGoingSideways && (taking || isEP))

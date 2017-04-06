@@ -19,64 +19,24 @@ matesInOne gs = fmap fst $ filter (\s -> isMate (snd s)) movePositions
 isMateInOne :: GameState -> Bool
 isMateInOne gs = length (matesInOne gs) > 0
 
-
--- A mate in two means: There exist a first move such that, for any opponents move
--- There is a mate in one.
-matesInTwo :: GameState -> [(Move, Move, Move)]
-matesInTwo gs = do
-    firstMove :: Move <- allNextLegalMoves gs
-    let newState = move gs firstMove
-    guard $ opponentIsMatable newState
-    guard $ not $ isMateInOne gs
-
-    opponentMove <- allNextLegalMoves newState
-    let afterOpponentMove = move newState opponentMove
-    guard $ not $ isMate afterOpponentMove
-
-    mateMove <- matesInOne afterOpponentMove
-
-    return (firstMove, opponentMove, mateMove)
-
-
-opponentMates :: GameState -> [(Move, Move)]
-opponentMates gs = do
-    firstMove :: Move <- allNextLegalMoves gs
-    let newState = move gs firstMove
-    mateMove <- matesInOne newState
-    return (firstMove, mateMove)
-    
-
-opponentIsMatable :: GameState -> Bool
-opponentIsMatable gs = (length (Un.count (fmap fst (opponentMates gs)))) == length (allNextLegalMoves gs)
-
-whitePiecePositions :: Piece -> GameState -> [Field]
-whitePiecePositions pc gs = getPositions gs pc
-
-blackPiecePositions :: Piece -> GameState -> [Field]
-blackPiecePositions pc gs = getPositions (invertGameStateColor gs) pc
+piecePositions :: Piece -> GameState -> Color -> [Field]
+piecePositions pc gs White = getPositions gs pc
+piecePositions pc gs Black = getPositions (invertGameStateColor gs) pc
 
 legalPosition :: GameState -> Bool
-legalPosition gs = bothSidesOneKing && noDuplicatedFields && notChecking
-    where   whiteKingPositions = whitePiecePositions King gs
-            blackKingPositions = blackPiecePositions King gs
-            hasWhiteKing = (length whiteKingPositions) == 1
-            hasBlackKing = (length blackKingPositions) == 1
-            bothSidesOneKing = hasWhiteKing && hasBlackKing
-            notChecking = not $ isChecking gs
-            numberDistinctFields = length $ Un.count apf
-            apf = fmap pfField (gsPosition gs) :: [Field]
-            numberFields = length apf
-            noDuplicatedFields = numberDistinctFields == numberFields
+legalPosition gs = bothSidesOneKing && noDuplicatedFields && not (isChecking gs)
+    where   numberKings = fmap (length . piecePositions King gs) [White, Black]
+            bothSidesOneKing = (maximum numberKings == 1) && (minimum numberKings == 1)
+            noDuplicatedFields = (length . Un.repeated . fmap pfField . gsPosition) gs == 0
 
 sensiblePosition :: GameState -> Bool
-sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not duplicatedColors
-  where     
-            lightPieceCount = fmap (length . getPositions gs) lightPieces
+sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not sameColorBishops
+  where     lightPieceCount = fmap (length . getPositions gs) lightPieces
             maxLightPieceCount = maximum lightPieceCount
-            bishops = getPositions gs Bishop
             queens = getPositions gs Queen
+            bishops = getPositions gs Bishop
             bishopColors = fmap fieldColor bishops
-            duplicatedColors = Un.unique bishopColors /= bishopColors
+            sameColorBishops = Un.unique bishopColors /= bishopColors
 
 goodPosition :: GameState -> Bool
 goodPosition = liftM2 (&&) legalPosition sensiblePosition
@@ -97,6 +57,9 @@ nextRandomGameState = do
     position <- evalRandIO (randomPieces 8)
     let gs = GameState position White ((False, False), (False, False)) Nothing 0 1
     return gs
+
+-- randomWhiteKing
+-- randomBlackFortress
 
 randomPositions :: Int -> IO [GameState]
 randomPositions n = sequence (replicate n nextRandomGameState)
