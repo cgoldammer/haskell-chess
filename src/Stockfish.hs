@@ -3,18 +3,17 @@ module Stockfish (mateFinder, MateMove) where
 
 import Board
 import Logic
-import Data.Char (chr)
-import qualified Data.Char as Ch
-import Data.List
-import qualified Data.Text as Te
+
+import Control.Applicative
 import Data.Aeson
 import Data.Attoparsec.Text
 import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.Char8 as C
-import qualified Turtle as Tu
-import Control.Applicative
+import qualified Data.Char as Ch
+import Data.List
 import Data.Maybe
-
+import qualified Data.Text as Te
+import qualified Turtle as Tu
 
 type Fen = String
 type MateMove = (Move, Int)

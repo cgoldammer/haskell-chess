@@ -24,9 +24,8 @@ import Logic
 import Various
 import Control.Applicative
 
--- import Data.Attoparsec
-import qualified Turtle as Tu
 import Data.Aeson
+import qualified Turtle as Tu
 
 
 fen = fullFen mate1PS
@@ -41,7 +40,7 @@ resultsString gs mates = U.toString $ encode printable
 
 runChess :: IO ()
 runChess = do
-    randomStates :: [GameState] <- randomGood 20000
+    randomStates :: [GameState] <- randomGood 100000
     print $ length randomStates
     mates :: [[MateMove]] <- traverse mateFromGameState randomStates 
     let printable = resultsString randomStates mates
@@ -62,7 +61,7 @@ bestMove :: [MateMove] -> Int -> Move
 bestMove mm num = fst $ head $ filter (\m -> ((snd m) == num)) mm
 
 filterMates :: [MateMove] -> Bool
-filterMates mm = length mm > 0 && numberMin == 1 && minNumber <= 3 && minNumber > 0
+filterMates mm = length mm > 0 && numberMin == 1 && minNumber >= 3 && minNumber <= 5
     where   minNumber = minimum numbers
             numbers = fmap snd mm
             numberMin = length $ filter (minNumber==) numbers

@@ -43,6 +43,15 @@ goodPosition = liftM2 (&&) legalPosition sensiblePosition
 
 lightPieces = [Rook, Bishop, Knight]
 
+randomFromFields :: (RandomGen g) => Color -> Piece -> [Field] -> Rand g PieceField
+randomFromFields color piece fields = do 
+    pos <- getRandomR (0, (length fields) - 1)
+    return $ PieceField piece color (fields !! pos)
+
+randomFortress :: (RandomGen g) => Rand g Position
+randomFortress = do 
+    pos <- getRandomR (0, (length blackFortresses) - 1)
+    return $ blackFortresses !! pos
 
 randomPiece :: (RandomGen g) => Rand g PieceField
 randomPiece = do 
@@ -52,14 +61,23 @@ randomPiece = do
 randomPieces :: (RandomGen g) => Int -> Rand g [PieceField]
 randomPieces n = sequence (replicate n randomPiece)
 
+whiteKingFields = [Field col R1 | col <- allColumns]
+
 nextRandomGameState :: IO GameState
 nextRandomGameState = do
-    position <- evalRandIO (randomPieces 8)
+    basePosition <- evalRandIO $ randomPieces 8
+    whiteKingPosition <- evalRandIO $ randomFromFields White King whiteKingFields
+    blackFortress <- evalRandIO $ randomFortress
+    let position = basePosition ++ [whiteKingPosition] ++ blackFortress
     let gs = GameState position White ((False, False), (False, False)) Nothing 0 1
     return gs
 
--- randomWhiteKing
--- randomBlackFortress
+blackFortressStrings = [
+      ["BKG8", "BPF7", "BPG7", "BPH7", "BRE8", "BQD8"]
+    , ["BKH8", "BPF6", "BPG7", "BPH7", "BRD8", "BBC7"]
+    , ["BKG8", "BPF7", "BPG6", "BPH6", "BPE7", "BBE8"]]
+
+blackFortresses = catMaybes $ fmap stringToPosition blackFortressStrings
 
 randomPositions :: Int -> IO [GameState]
 randomPositions n = sequence (replicate n nextRandomGameState)
@@ -74,8 +92,9 @@ pawnOnBadRow Pawn R1 = True
 pawnOnBadRow Pawn R8 = True
 pawnOnBadRow _ _ = False
 
-piecesAndFields = [(piece, Field col row) | piece <- allPieces, col <- allColumns, row <- allRows, not (pawnOnBadRow piece row)]
+piecesAndFields = [(piece, Field col row) | piece <- allNonKingPieces, col <- allColumns, row <- allRows, not (pawnOnBadRow piece row)]
 turnIntoPieceField color = \(piece, Field col row) -> PieceField piece color (Field col row)
+
 allPieceFields = (fmap (turnIntoPieceField White) piecesAndFields) ++ (fmap (turnIntoPieceField Black) piecesAndFields)
 allFields = [Field col row | col <- allColumns, row <- allRows]
 
