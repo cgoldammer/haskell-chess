@@ -14,6 +14,7 @@ module Board (stringToPosition
             , allRows
             , stringToPieceField
             , stringToField
+            , colorString
             , allColumns
             , shortPiece
             , Column (A, B, C, D, E, F, G, H)

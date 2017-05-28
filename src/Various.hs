@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverlappingInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
 
 module Various (testGS, testGS2, mate1GS, mate1PS, mat) where
 

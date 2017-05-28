@@ -1,4 +1,4 @@
-
+{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 -- Pawns, promotion, castling
 
 
@@ -15,14 +15,23 @@ module Logic (allPhysicalMoves
             , isChecking
             , inCheck
             , pieceFields
+            , parseFen
             , allOpponentMoves
+            , fenStringToPosition
             ) where
 
 import Data.Maybe
 import Board
+import Helpers
 import Control.Monad
+import Control.Applicative
 import qualified Data.String.Utils as SU
 import qualified Data.Char as C
+import qualified Data.Text as T
+import qualified Text.Read as TR
+import Data.Attoparsec.Text hiding (take, D, takeWhile)
+import Data.Attoparsec.Combinator
+import qualified Data.Attoparsec.ByteString.Char8 as C
 import Helpers
 import Data.List
 -- Todo
@@ -285,7 +294,7 @@ selectByPosition :: Position -> [Field] -> Position
 selectByPosition ps fs = filter (\pf -> (elem (pfField pf) fs)) ps
 
 
-type Fen = (String, Int)
+type Fen = String
 -- We want to prevent users from constructing Fen's without validating
 -- them. The newtype is not exported, thus obtaining a ValidatedFen
 -- requires using the `constructFen` function
@@ -308,7 +317,7 @@ piecesOnField ps f = index 0 (filter byField ps)
     where   byField pf = pfField pf == f
 
 basicFenFromRow :: [PieceField] -> String
-basicFenFromRow ps = [pieceFieldFen (firstPieceOnColumn ps c) | c <- allColumns]
+basicFenFromRow ps = fmap (\c -> pieceFieldFen (firstPieceOnColumn ps c)) allColumns
 
 aggregateFen :: Int -> String -> String
 aggregateFen i = SU.replace (take i (repeat '1')) (show i)
@@ -322,13 +331,76 @@ firstPieceOnColumn ps c = index 0 (filter (\pf -> fieldColumn (pfField pf) == c)
 positionByRow :: Position -> [Position]
 positionByRow ps = fmap (piecesOnRow ps) (reverse allRows)
 
-basicFen :: Position -> String
-basicFen ps = intercalate "/" $ fmap aggregator $ fmap basicFenFromRow $ positionByRow ps
-
-fullFen :: Position -> String
-fullFen ps = "fen " ++ basicFen ps ++ " w - 0 1"
+basicFen :: Position -> Fen
+basicFen ps = intercalate "/" $ fmap (aggregator . basicFenFromRow) $ positionByRow ps
 
 aggregator s = foldl (flip ($)) s (fmap aggregateFen (reverse [1..8]))
+
+
+fullFen :: Position -> Fen
+fullFen ps = "fen " ++ basicFen ps ++ " w - 0 1"
+
+fenStringToPosition :: String -> Position
+fenStringToPosition s = catMaybes $ fmap stringToPieceField [p ++ f | (p, f) <- collected]
+    where
+         expanded = concat $ fmap asRepeated $ cleanFenString s
+         pieceStrings = fmap fenPieceFormatter expanded
+         collected = zip pieceStrings allFieldsForFen
+
+
+cleanFenString :: String -> String 
+cleanFenString = filter (not . (`elem` ("/"::String)))
+
+allFieldsForFen :: [String]
+allFieldsForFen = fmap show [Field c r | r <- reverse allRows, c <- allColumns]
+
+fenColorString :: Char -> Char
+fenColorString x
+  | x `elem` ['a'..'z'] = 'B'
+  | x `elem` ['A'..'Z'] = 'W'
+  | otherwise = ' '
+
+fenPieceFormatter :: Char -> String
+fenPieceFormatter x = (fenColorString x):[C.toUpper x]
+
+asRepeated :: Char -> String
+asRepeated x 
+  | x `elem` ['1'..'8'] = take (read [x] :: Int) (repeat '0')
+  | otherwise = [x]
+
+
+parseFen :: Parser (Maybe GameState)
+parseFen = do
+  positionFen :: String <- many (letter <|> digit <|> (char '/'))
+  let position = fenStringToPosition positionFen
+  space
+  playerToMoveString :: Char <- letter
+  let playerToMove = colorString [C.toUpper playerToMoveString]
+  space
+  castlingRightsString :: String <- many' (char 'K' <|> char ('Q'))
+  let castlingRights = castlingRightsParser castlingRightsString
+  space
+  epTargetString :: String <- many' letter
+  let epTarget = stringToField $ fmap C.toUpper epTargetString
+  halfMoveString :: String <- many' digit
+  space
+  fullMoveNumberString :: String <- many' digit
+  let halfMove = (TR.readMaybe halfMoveString) :: Maybe Int
+  let fullMove = (TR.readMaybe fullMoveNumberString) :: Maybe Int
+  let allPresent = isJust playerToMove && isJust halfMove && isJust fullMove
+  let gs = GameState position (fromJust playerToMove) castlingRights epTarget (fromJust halfMove) (fromJust fullMove)
+  return $ makeMaybe allPresent gs
+
+
+castlingRightsParser :: String -> CastlingRights
+castlingRightsParser s = ((wk, wq), (bk, bq))
+  where
+    wk = 'W' `elem` s
+    bk = 'w' `elem` s
+    wq = 'Q' `elem` s
+    bq = 'q' `elem` s
+
+
 
 
 

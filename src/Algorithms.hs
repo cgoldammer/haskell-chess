@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverlappingInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
 
 module Algorithms (randomGood, randomPositions) where
 

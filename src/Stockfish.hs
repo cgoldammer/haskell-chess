@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, OverlappingInstances, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 module Stockfish (mateFinder, MateMove) where
 
 import Board
