@@ -15,7 +15,9 @@ module Logic (allPhysicalMoves
             , isChecking
             , inCheck
             , pieceFields
+            , pieceFieldForMove
             , parseFen
+            , castlingRightsParser
             , allOpponentMoves
             , fenStringToPosition
             ) where
@@ -112,6 +114,9 @@ updateCastlingRights gs mv = updatedBothRights where
 allNextLegalMoves :: GameState -> [Move]
 allNextLegalMoves gs = filter notInCheck (allPhysicalMoves gs)
     where notInCheck mv = not (isChecking (move gs mv))
+
+pieceFieldForMove :: GameState -> Move -> PieceField
+pieceFieldForMove gs mv = head [pf | pf <- gsPosition gs, moveFrom mv == pfField pf]
 
 allNextStates :: GameState -> [GameState]
 allNextStates gs = fmap (move gs) (allNextLegalMoves gs)
@@ -369,34 +374,34 @@ asRepeated x
   | otherwise = [x]
 
 
-parseFen :: Parser (Maybe GameState)
+parseFen :: Parser GameState
 parseFen = do
-  positionFen :: String <- many (letter <|> digit <|> (char '/'))
+  positionFen :: String <- many1' (letter <|> digit <|> (char '/'))
   let position = fenStringToPosition positionFen
   space
-  playerToMoveString :: Char <- letter
-  let playerToMove = colorString [C.toUpper playerToMoveString]
+  playerToMoveString :: Char <- (char 'w' <|> char 'b')
+  let playerToMove = fromJust $ colorString [C.toUpper playerToMoveString]
   space
-  castlingRightsString :: String <- many' (char 'K' <|> char ('Q'))
+  castlingRightsString :: String <- many1' (char 'K' <|> char 'Q' <|> char 'q' <|> char 'k')
   let castlingRights = castlingRightsParser castlingRightsString
   space
-  epTargetString :: String <- many' letter
+  epTargetString :: String <- many1' (letter <|> digit <|> char '-')
   let epTarget = stringToField $ fmap C.toUpper epTargetString
-  halfMoveString :: String <- many' digit
   space
-  fullMoveNumberString :: String <- many' digit
-  let halfMove = (TR.readMaybe halfMoveString) :: Maybe Int
-  let fullMove = (TR.readMaybe fullMoveNumberString) :: Maybe Int
-  let allPresent = isJust playerToMove && isJust halfMove && isJust fullMove
-  let gs = GameState position (fromJust playerToMove) castlingRights epTarget (fromJust halfMove) (fromJust fullMove)
-  return $ makeMaybe allPresent gs
+  halfMove :: Int <- decimal
+  space
+  fullMove :: Int <- decimal
+  endOfInput
+  -- let halfMove = 1
+  -- let fullMove = 1
+  return $ GameState position playerToMove castlingRights epTarget halfMove fullMove
 
 
 castlingRightsParser :: String -> CastlingRights
 castlingRightsParser s = ((wk, wq), (bk, bq))
   where
-    wk = 'W' `elem` s
-    bk = 'w' `elem` s
+    wk = 'K' `elem` s
+    bk = 'k' `elem` s
     wq = 'Q' `elem` s
     bq = 'q' `elem` s
 

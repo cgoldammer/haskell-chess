@@ -8,6 +8,9 @@ import Various
 import qualified Data.Set as S
 import Data.Maybe
 
+
+
+
 rookPosition = Field A R1
 possibleRookMoves = ["A2", "A7", "B1", "H1"]
 impossibleRookMoves = ["A1", "B2"]
