@@ -7,6 +7,9 @@ module Pgn (
   , possibleMoveFields
   , pgnPiece
   , pgnToTargetField
+  , PgnTag (..)
+  , tagParse
+  , eventParse, siteParse, fullTagParse
   , moveToPgn) where
 
 import Board
@@ -35,10 +38,10 @@ pgnMove = undefined
 possibleMoveFields :: GameState -> PgnMove -> [(Move, [String])]
 possibleMoveFields gs pgn = zip moves pgnMoves
     where   movePiece = pgnPiece pgn
-            allMoves = allNextLegalMoves gs
-            allPieceFields = getPositions gs movePiece
+            allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
             targetField = pgnToTargetField pgn
-            movesWithPieceFields = [(mv, pieceFieldForMove gs mv) | mv <- allMoves, targetField == Just (moveTo mv) && pfPiece (pieceFieldForMove gs mv) == movePiece && targetField == Just (moveTo mv)]
+            color = gsColor gs
+            movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv)]
             moves = fmap fst movesWithPieceFields
             pgnMoves = createPgnMoves gs movesWithPieceFields
 
@@ -87,23 +90,75 @@ moveToPgnHelper withColumn withRow mv pf = concat $ catMaybes values
 pgnPieceChar :: Piece -> String
 pgnPieceChar piece = filter (not . (`elem` ("P"::String))) $ shortPiece piece
 
-
-
-
 startGameFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
--- Nf3
--- Find all moves possible by that piece
--- If it's simple form, e.g. Nf3, then find that move and make it
--- Special case:
--- N1f3
--- Ng1f3 Ng5f3
--- Patterns: Keep destination field. Remove either column or row from starting field
--- if there is a match, continue, otherwise try the other one
--- if none match at all, throw an error
+-- data ParsedGame = ParsedGame { startingPosition :: GameState, moves :: [Move]}
+-- data PgnGame = { PgnTags :: [PgnTag], PgnGame :: ParsedGame }
+
+-- pgnGameParse :: Parser PgnGame
+--   tags <- many' $ eventParse <|> siteParse <|> otherParse
+--   emptyline
+--   game :: String <- many' moveSetParser
+
+--   return $ tags game
+
+-- gameParse :: Parser String
+-- gameParse = do
+--   results <- many' (
+--   results <- many' (char <|> space <|> digit
+
+-- moveSetParser :: Parser String
+-- moveSetParser = do
+--   number <- digit
+--   char '.'
+--   space
+--   moves <- many' (digit <|> char <|> space)
+--   return
+
+-- -- Fields: Event, Site, Date, Round, White, Black, Result, WhiteElo, BlackElo, ECO"
 
 
+eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ many' $ letter <|> space <|> digit
+siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
+dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ letter <|> space
+roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
 
+tagParse :: String -> Parser a -> Parser a
+tagParse tagName p = do
+  string $ Te.pack $ "[" ++ tagName ++ " \""
+  event <- p
+  string "\"]"
+  return event
+
+fullTagParse :: Parser PgnTag
+fullTagParse = do
+  result <- eventParse <|> siteParse <|> dateParse <|> roundParse <|> otherParse
+  return result
+
+otherParse :: Parser PgnTag
+otherParse = do
+  char '['
+  tagName <- many' letter
+  space
+  char '"'
+  event :: String <- many' $ letter <|> digit <|> space
+  string "\"]"
+  return $ PgnOther tagName event
+  
+data Player = Player {firstName :: String, lastName :: String} deriving (Show, Eq)
+
+data PgnTag = 
+    PgnEvent String
+  | PgnSite String
+  | PgnOther String String
+  | PgnDate String
+  | PgnRound Int
+  | PgnWhite Player
+  | PgnBlack Player
+  | PgnResult PossibleResult
+  deriving (Show, Eq)
+
+data PossibleResult = WhiteWin | Draw | BlackWin deriving (Show, Eq)
 
 
 
@@ -115,6 +170,7 @@ data Game = Game { startingGameState :: GameState, gameMoves :: [Move] }
 
 
 -- In other words, IO gives me [Game]. Then use it.
+
 
 
 
