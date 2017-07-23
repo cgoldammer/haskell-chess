@@ -11,14 +11,6 @@ import Data.List
 import Control.Monad
 import Control.Monad.Random
 
-matesInOne :: GameState -> [Move]
-matesInOne gs = fmap fst $ filter (\s -> isMate (snd s)) movePositions
-    where   allMoves = allNextLegalMoves gs
-            movePositions = zip allMoves (fmap (move gs) allMoves)
-
-isMateInOne :: GameState -> Bool
-isMateInOne gs = length (matesInOne gs) > 0
-
 piecePositions :: Piece -> GameState -> Color -> [Field]
 piecePositions pc gs White = getPositions gs pc
 piecePositions pc gs Black = getPositions (invertGameStateColor gs) pc

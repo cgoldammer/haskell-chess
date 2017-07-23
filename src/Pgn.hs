@@ -9,7 +9,10 @@ module Pgn (
   , pgnToTargetField
   , PgnTag (..)
   , tagParse
-  , eventParse, siteParse, fullTagParse
+  , eventParse, siteParse, fullTagParse, parseAllTags
+  , parseGameMoves, moveParser, bothMoveParser
+  , pgnGame
+  , startingGS
   , moveToPgn) where
 
 import Board
@@ -35,19 +38,19 @@ type PgnMove = String
 pgnMove :: GameState -> Move -> PgnMove
 pgnMove = undefined
 
-possibleMoveFields :: GameState -> PgnMove -> [(Move, [String])]
-possibleMoveFields gs pgn = zip moves pgnMoves
+possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
+possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
     where   movePiece = pgnPiece pgn
             allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
             targetField = pgnToTargetField pgn
             color = gsColor gs
             movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv)]
-            moves = fmap fst movesWithPieceFields
+            movesWithPiece = [(pfPiece pf, m) | (m, pf) <-movesWithPieceFields]
             pgnMoves = createPgnMoves gs movesWithPieceFields
 
 pgnToTargetField pgn = stringToField $ fmap Ch.toUpper $ reverse $ Data.List.take 2 $ reverse pgn
 
-pgnToMove :: GameState -> PgnMove -> Maybe Move
+pgnToMove :: GameState -> PgnMove -> Maybe (Piece, Move)
 pgnToMove gs pgn = listToMaybe [mv | (mv, pgnList) <- possibleMoveFields gs pgn, pgn `elem` pgnList]
 
 pgnPiece :: PgnMove -> Piece
@@ -91,6 +94,8 @@ pgnPieceChar :: Piece -> String
 pgnPieceChar piece = filter (not . (`elem` ("P"::String))) $ shortPiece piece
 
 startGameFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+gs = parseOnly parseFen (Te.pack startGameFen)
+startingGS = fromJust $ either (const Nothing) Just gs
 
 -- data ParsedGame = ParsedGame { startingPosition :: GameState, moves :: [Move]}
 -- data PgnGame = { PgnTags :: [PgnTag], PgnGame :: ParsedGame }
@@ -128,12 +133,18 @@ tagParse tagName p = do
   string $ Te.pack $ "[" ++ tagName ++ " \""
   event <- p
   string "\"]"
+  endOfLine
   return event
 
 fullTagParse :: Parser PgnTag
 fullTagParse = do
   result <- eventParse <|> siteParse <|> dateParse <|> roundParse <|> otherParse
   return result
+
+parseAllTags :: Parser [PgnTag]
+parseAllTags = do
+  tags <- many' fullTagParse
+  return tags
 
 otherParse :: Parser PgnTag
 otherParse = do
@@ -143,6 +154,7 @@ otherParse = do
   char '"'
   event :: String <- many' $ letter <|> digit <|> space
   string "\"]"
+  endOfLine
   return $ PgnOther tagName event
   
 data Player = Player {firstName :: String, lastName :: String} deriving (Show, Eq)
@@ -160,17 +172,61 @@ data PgnTag =
 
 data PossibleResult = WhiteWin | Draw | BlackWin deriving (Show, Eq)
 
+pgnMoveMaybe :: Maybe GameState -> PgnMove -> Maybe (Piece, Move)
+pgnMoveMaybe Nothing _ = Nothing
+pgnMoveMaybe gs mp = pgnToMove (fromJust gs) mp
 
+type FullState = (Maybe GameState, Maybe (Piece, Move))
 
-pgnGame :: [pgnMove] -> Game
-pgnGame = undefined
--- pgnGame pgnMoves = foldl move startGameState pgnMoves
+pgnMoveFolder :: FullState -> PgnMove -> FullState
+pgnMoveFolder (Nothing, _) _ = (Nothing, Nothing)
+pgnMoveFolder (Just gs, _) pgnMove = (gs', mv)
+  where gs' = fmap (move gs) mv
+        mv = pgnToMove gs pgnMove
+
+pgnAsMoves :: [PgnMove] -> [FullState]
+pgnAsMoves pgnMoves = scanl pgnMoveFolder (Just startingGS, Nothing) pgnMoves
+
+pgnGame :: [PgnMove] -> Maybe Game
+pgnGame pgnMoves = liftA2 Game startingGS $ sequence moves
+  where fs = pgnAsMoves pgnMoves
+        startingGS = fst $ head fs
+        movesWithPiece = tail $ fmap snd fs -- [Maybe (Piece, Move)]
+        moves = ((fmap . fmap) snd) movesWithPiece -- [Maybe Move]
 
 data Game = Game { startingGameState :: GameState, gameMoves :: [Move] }
 
-
 -- In other words, IO gives me [Game]. Then use it.
 
+moveBegin = do
+  many1' digit
+  char '.'
+  space
 
+bothMoveParser :: Parser [String]
+bothMoveParser = do
+  moveBegin
+  moveWhite <- singleMoveParser
+  space
+  moveBlack <- singleMoveParser
+  many' space
+  return [moveWhite, moveBlack]
 
+whiteMoveParser :: Parser [String]
+whiteMoveParser = do
+  moveBegin
+  moveWhite <- singleMoveParser
+  many' space
+  return [moveWhite]
+
+singleMoveParser :: Parser String
+singleMoveParser = many1' (letter <|> digit <|> char '#' <|> char '+')
+
+moveParser = bothMoveParser <|> whiteMoveParser
+
+parseGameMoves :: Parser [String]
+parseGameMoves = do
+  moves <- many1' moveParser
+  endOfInput
+  return $ concat moves
 

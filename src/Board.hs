@@ -13,10 +13,11 @@ module Board (stringToPosition
             , columnInt
             , allRows
             , stringToPieceField
-            , stringToField
+            , stringToField, stringToMove
+            , stringToPiece
             , colorString
             , allColumns
-            , shortPiece
+            , shortPiece, shortColumn, shortRow, shortField
             , Column (A, B, C, D, E, F, G, H)
             , Row (R1, R2, R3, R4, R5, R6, R7, R8)
             , Move (Move, moveFrom, moveTo, movePromotionPiece)
@@ -121,6 +122,22 @@ colorString _ = Nothing
 stringToField :: String -> Maybe Field
 stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe [r])))
 stringToField _ = Nothing
+
+stringToMove :: String -> Maybe Move
+stringToMove (c1 : c2 : c3 : c4 : rest) = join $ makeMaybe parseSucceeded $ liftM2 (\f t -> Move f t promotionPiece) from to
+  where from = stringToField [c1, c2]
+        to = stringToField [c3, c4]
+        promotionPieceAttempt = case rest of 
+          [] -> Left Nothing
+          otherwise -> Right $ stringToPiece rest
+        (promotionPiece, parseSucceeded) = case promotionPieceAttempt of
+          Left Nothing -> (Nothing, True)
+          Right Nothing -> (Nothing, False)
+          Right val -> (val, True)
+
+
+
+
 
 stringToPieceField :: String -> Maybe PieceField 
 stringToPieceField [colS, pieceS, cS, rS]

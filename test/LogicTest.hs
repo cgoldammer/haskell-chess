@@ -82,7 +82,7 @@ checkTests = fmap (conditionHolds inCheck "Should be in check, but isn't") (mate
 isCheckTests = fmap (conditionHolds (not . isChecking) "Should not be checking, but is") (mates ++ nonMates)
 
 oppMoves :: [Field]
-oppMoves = fmap moveTo $ allOpponentMoves $ mates !! 0
+oppMoves = fmap (moveTo . snd) $ allOpponentMoves $ mates !! 0
 oppMoveTest = TestCase $ assertBool (show oppMoves) ((fromJust (stringToField "A1")) `elem` oppMoves)
 
 pawnPosition = ["WKA1", "WPE4", "WPD2", "WPC2", "BKA8", "BPD4", "BPD5"]
@@ -110,7 +110,7 @@ pawnToFields gs = fmap moveTo $ pawnToMoves gs
 pawnToMoves :: GameState -> [Move]
 pawnToMoves gs = allPawnToFields
     where   allPawnFields = getPositions gs Pawn
-            allPawnToFields = [mv | mv <- allNextLegalMoves gs, (moveFrom mv) `elem` allPawnFields]
+            allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (moveFrom mv) `elem` allPawnFields]
 pawnTests = pawnTestWhite ++ pawnTestBlack ++ pawnTestBlackEP ++ pawnTestPromote
 
 movesTests = fmap (movesTest allNextFields) mates

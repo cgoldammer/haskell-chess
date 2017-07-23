@@ -7,10 +7,11 @@ import qualified Data.Set as S
 import Data.Maybe
 import LogicTest
 import PgnTest
+import StringParseTest
 
 main :: IO ()
 main = do
     runTestTT tests
     return ()
 
-tests = TestList $ pgnTests ++ logicTests
+tests = TestList $ logicTests ++ stringParseTests ++ pgnTests
