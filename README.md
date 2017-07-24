@@ -1,15 +1,13 @@
 # Chess-haskell
 
-A chess rule engine that understands the game and can interface with Stockfish
+A chess rule engine.
 
-# Todo
+Current features:
 
-- Algorithmically created positions: 
-  - first move isn't check
-  - All other moves lose
-  - You attack against commong King + Pawn formations
+- encode the full logic of a chess game
+- import and export games using PGN
+- import and export positions using the FEN notation
+- interface with Stockfish to find mates
+- algorithmically create chess mating puzzles
 
-- Search over actual games: 
-  - Find all positions that have a mate in 2, 3, or 4. Quiz: # of moves to mate
-  - Restrict to positions in which the player didn't find the mate
 

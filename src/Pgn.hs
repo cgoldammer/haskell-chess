@@ -45,7 +45,7 @@ possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
             targetField = pgnToTargetField pgn
             color = gsColor gs
             movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv)]
-            movesWithPiece = [(pfPiece pf, m) | (m, pf) <-movesWithPieceFields]
+            movesWithPiece = [(pfPiece pf, m) | (m, pf) <- movesWithPieceFields]
             pgnMoves = createPgnMoves gs movesWithPieceFields
 
 pgnToTargetField pgn = stringToField $ fmap Ch.toUpper $ reverse $ Data.List.take 2 $ reverse pgn
@@ -96,32 +96,6 @@ pgnPieceChar piece = filter (not . (`elem` ("P"::String))) $ shortPiece piece
 startGameFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 gs = parseOnly parseFen (Te.pack startGameFen)
 startingGS = fromJust $ either (const Nothing) Just gs
-
--- data ParsedGame = ParsedGame { startingPosition :: GameState, moves :: [Move]}
--- data PgnGame = { PgnTags :: [PgnTag], PgnGame :: ParsedGame }
-
--- pgnGameParse :: Parser PgnGame
---   tags <- many' $ eventParse <|> siteParse <|> otherParse
---   emptyline
---   game :: String <- many' moveSetParser
-
---   return $ tags game
-
--- gameParse :: Parser String
--- gameParse = do
---   results <- many' (
---   results <- many' (char <|> space <|> digit
-
--- moveSetParser :: Parser String
--- moveSetParser = do
---   number <- digit
---   char '.'
---   space
---   moves <- many' (digit <|> char <|> space)
---   return
-
--- -- Fields: Event, Site, Date, Round, White, Black, Result, WhiteElo, BlackElo, ECO"
-
 
 eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ many' $ letter <|> space <|> digit
 siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
@@ -195,6 +169,7 @@ pgnGame pgnMoves = liftA2 Game startingGS $ sequence moves
         moves = ((fmap . fmap) snd) movesWithPiece -- [Maybe Move]
 
 data Game = Game { startingGameState :: GameState, gameMoves :: [Move] }
+data PgnGame = PgnGame { pgnGameTags :: [PgnTag], parsedPgnGame :: Game }
 
 -- In other words, IO gives me [Game]. Then use it.
 
@@ -230,3 +205,9 @@ parseGameMoves = do
   endOfInput
   return $ concat moves
 
+parseWholeGame :: Parser (Maybe PgnGame)
+parseWholeGame = do
+  tags <- parseAllTags
+  moves <- parseGameMoves
+  many' (space <|> digit <|> char '-' <|> char '/')
+  return $ uncurry (liftA2 PgnGame) (Just tags, pgnGame moves)

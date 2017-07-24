@@ -143,25 +143,6 @@ testMovesGood s = TestCase $ assertBool error $ isJust game
           error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
 
 
-singleTests = [
-      testPositionParse
-    , testStartingFen
-    , testCastlingParser
-    , testStringTag
-    , testMultipleTags
-    , testSingleMove
-    , testFirst
-    , testSecond
-    , testMoveParse]
-
-testsMoveGood = fmap testMovesGood movesGood
-testsMoveBad = fmap testMovesBad movesNotParse
-testMoves = testsMoveGood ++ testsMoveBad
-
-pgnParseTests = pgnSimpleParse ++ pgnGameParse
-
-pgnTests = singleTests ++ pgnParseTests ++ testTags ++ testMoves
-
 firstMove = fromJust $ stringToMove "E2E4"
 secondMove = fromJust $ stringToMove "E7E5"
 
@@ -175,4 +156,22 @@ testFirst = TestCase $ assertEqual "Expected first move" (Just firstMove) firstT
 testSecond = TestCase $ assertEqual "Expected second move" (Just secondMove) secondToMove
 
 
+singleTests = [
+      testPositionParse
+    , testStartingFen
+    , testCastlingParser
+    , testStringTag
+    , testMultipleTags
+    , testSingleMove
+    , testFirst
+    , testSecond
+    , testMoveParse]
+
+testsMoveGood = fmap testMovesGood movesGood
+testsMoveNonParse = fmap testMovesBad movesNotParse
+testMoves = testsMoveGood ++ testsMoveNonParse
+
+pgnParseTests = pgnSimpleParse ++ pgnGameParse
+
+pgnTests = singleTests ++ pgnParseTests ++ testTags ++ testMoves
 
