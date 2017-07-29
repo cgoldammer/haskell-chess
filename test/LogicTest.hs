@@ -8,9 +8,6 @@ import Various
 import qualified Data.Set as S
 import Data.Maybe
 
-
-
-
 rookPosition = Field A R1
 possibleRookMoves = ["A2", "A7", "B1", "H1"]
 impossibleRookMoves = ["A1", "B2"]
@@ -64,16 +61,21 @@ mateTest gs = TestCase (assertBool mateMessage (isMate gs))
 nonMateTest gs = TestCase (assertBool mateMessage (not (isMate gs)))
     where mateMessage = "This should not be mate, but is: " ++ (show gs)
 
+toGameState :: Position -> GameState
 toGameState ps = defaultGameState ps White
+
 mates = fmap toGameState $ catMaybes (fmap stringToPosition matePositions)
 nonMates = fmap toGameState $ catMaybes (fmap stringToPosition nonMatePositions)
 
 allNextFields = []
-
 movesTest expected ps = TestCase (assertBool errorMessage (movesCalculated == movesExpected))
     where   movesCalculated = S.fromList $ allNextLegalMoves ps
             movesExpected = S.fromList expected
             errorMessage = "Position: " ++ show ps ++ " Expected: " ++ show movesExpected ++ " but got: " ++ show movesCalculated
+
+movesTests = fmap (\m -> ("No moves in " ++ show m) ~: movesTest allNextFields m) mates
+mateTests = fmap mateTest mates ++ fmap nonMateTest nonMates
+
 
 conditionHolds :: (GameState -> Bool) -> String -> GameState -> Test
 conditionHolds fn name gs = TestCase (assertBool (name ++ ": " ++ show gs) (fn gs))
@@ -113,7 +115,72 @@ pawnToMoves gs = allPawnToFields
             allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (moveFrom mv) `elem` allPawnFields]
 pawnTests = pawnTestWhite ++ pawnTestBlack ++ pawnTestBlackEP ++ pawnTestPromote
 
-movesTests = fmap (movesTest allNextFields) mates
-mateTests = fmap mateTest mates ++ fmap nonMateTest nonMates
-allTests = possibleTests ++ movesTests ++ [oppMoveTest] ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests
+
+
+-- all castling combinations should be possible, thus depend on the gamestate castling rights.
+posCastleBoth = fromJust $ stringToPosition ["WRA1", "WKE1", "WRH1", "BKG8"]
+gsCastleBoth = toGameState posCastleBoth
+
+testCastleBoth = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+    where error = "Both castling moves should be possible"
+          intersection = intersect possible movesExpected
+          possible = fmap snd $ allNextLegalMoves gsCastleBoth
+          movesExpected = catMaybes $ fmap stringToMove ["E1C1", "E1G1"]
+
+-- after white castles kingside (queenside), the rook is on f1 (c1)
+testRookField mv expectedField = TestCase $ assertEqual error (S.fromList expectedFields) intersection
+    where error = "Rook expected on: "
+          fields = fmap pfField $ gsPosition gsAfterCastle
+          expectedFields = [fromJust (stringToField expectedField)]
+          intersection = intersect fields expectedFields
+          gsAfterCastle = move gsCastleBoth (King, fromJust (stringToMove mv))
+
+testRookFields = [
+      testRookField "E1G1" "F1"
+    , testRookField "E1C1" "C1"]
+
+
+gsWithCastling :: Position -> Color -> CastlingRights -> GameState
+gsWithCastling ps color cr = GameState ps color cr Nothing 0 1
+
+testCastleSide cr mv = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+    where error = "Exactly one castle should be possible" ++ show gsCastleOne ++ " | All moves: " ++ show kingFields
+          movesExpected = catMaybes $ fmap stringToMove [mv]
+          gsCastleOne = gsWithCastling posCastleBoth White cr
+          possible = fmap snd $ allNextLegalMoves gsCastleOne
+          intersection = intersect possible movesExpected
+          kingFields = fmap (moveTo . snd) $ filter (\m -> fst m == King) $ allNextLegalMoves gsCastleOne
+
+crKing = ((True, False), (False, False))
+crQueen = ((False, True), (False, False))
+testCastleOneSide = [
+    testCastleSide crKing "E1G1",
+    testCastleSide crQueen "E1C1"]
+
+-- Queenside castling is allowed, kingside castling is not (because of rook on f8)
+posCastleQueen = fromJust $ stringToPosition ["WRA1", "WKE1", "WRH1", "BKG8", "BRF8"]
+gsCastleQueen = toGameState posCastleBoth
+testCastleQueen = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+    where error = "Only queenside castle should be possible"
+          intersection = intersect possible movesExpected
+          possible = fmap snd $ allNextLegalMoves gsCastleQueen
+          movesExpected = catMaybes $ fmap stringToMove ["E1C1"]
+
+-- The same
+-- ["WRA1", "WKE1", "WRH1", "BRG8", "BKH8"]
+
+-- White to move can take ep iff the gamestate has an ep pawn on e5.
+-- If it's black's move, white can take ep on c6 (and only c6) iff black plays c5.
+-- ["WKA1", "BKA8", "WPD5", "BDE5", "BPC7"]
+
+-- If black is mate, he has no moves
+-- ["WKA1", "WRA2", "WRB2", "BKA8"]
+
+singleTests = [
+      "Opponenet Move test" ~: oppMoveTest
+    , "Castling Queen" ~: testCastleQueen
+    , "Castling Both" ~: testCastleBoth]
+
+allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields
+
 logicTests = allTests
