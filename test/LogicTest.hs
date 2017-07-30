@@ -187,10 +187,13 @@ testsLosesRight = [
   , testLosesRight ["A1A2", "G8F8", "A2A1", "F8G8"] ["E1G1"]
   , testLosesRight ["H1H2", "G8F8", "H2H1", "F8G8"] ["E1C1"]]
     
+-- After a promotion, the initial pawn disappears
+stringToGs = toGameState . fromJust . stringToPosition
+newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stringToMove mvs
+
 -- White to move can take ep iff the gamestate has an ep pawn on e5.
 -- If it's black's move, white can take ep on c6 (and only c6) iff black plays c5.
-posEp = fromJust $ stringToPosition ["WKA1", "BKA8", "WPC2", "WPE2", "BPD4"]
-gsEp = toGameState posEp
+gsEp = stringToGs ["WKA1", "BKA8", "WPC2", "WPE2", "BPD4"]
 
 testEp mvs mvExpected error = TestCase $ assertEqual error (S.fromList movesExpected) intersection
   where movesExpected = catMaybes $ fmap stringToMove mvExpected
@@ -203,18 +206,52 @@ testsEp = [
   , testEp ["E2E4"] ["D4D3", "D4E3"] "Can take the d-pawn en passant"
   , testEp ["E2E4", "A8B8", "A1B1"] ["D4D3"] "Cannot take the c-pawn after intermediate moves"]
 
+ownPieces :: GameState -> Piece -> [Field]
+ownPieces gs p = fmap pfField $ filter (\pf -> pfPiece pf == p) $ ownPieceFields gs
+
+fieldsFromString s = fmap (fromJust . stringToField) s
+
 testEpDisappears = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
-  where intersection = intersect whitePawnFields fieldsExpected
-        newState = fromJust $ tryMoves (Just gsEp) $ catMaybes $ fmap stringToMove ["C2C4", "D4C3"]
-        whitePawnFields = fmap pfField $ filter (\pf -> pfPiece pf == Pawn) $ ownPieceFields newState
-        fieldsExpected = [fromJust $ stringToField "E2"]
+  where intersection = intersect whiteFields fieldsExpected
+        newState = newStateFromMoves gsEp ["C2C4", "D4C3"]
+        whiteFields = ownPieces newState Pawn
+        fieldsExpected = fieldsFromString ["E2"]
         error = "Pawn that is taken ep disappears" ++ show newState
+
+gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
+
+testPromotionPawnDisappears = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
+  where intersection = intersect whiteFields fieldsExpected
+        newState = invertGameStateColor $ newStateFromMoves gsPromote ["G7G8N"]
+        whiteFields = ownPieces newState Pawn
+        fieldsExpected = []
+        error = "Pawn that promotes disappears" ++ show newState
+
+testPromotionNewPiece = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
+  where intersection = intersect whiteFields fieldsExpected
+        newState = invertGameStateColor $ newStateFromMoves gsPromote ["G7G8N"]
+        whiteFields = ownPieces newState Knight
+        fieldsExpected = fieldsFromString ["G8"]
+        error = "New knight has appeared: " ++ show newState
+
+-- You can promote by taking.
+gsPromoteTake = stringToGs ["WKA1", "BKA8", "WPG7", "BNH8"]
+
+testPromotionTake = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
+  where intersection = intersect whiteFields fieldsExpected
+        newState = newStateFromMoves gsPromoteTake ["G7H8N"]
+        whiteFields = ownPieces newState Knight
+        fieldsExpected = fieldsFromString []
+        error = "The knight should be taken: " ++ show newState
 
 singleTests = [
       "Opponent Move test" ~: oppMoveTest
     , "Pawn that is taken en passant disappears" ~: testEpDisappears
     , "Castling Queen" ~: testCastleQueen
     , "Castling Both black" ~: testCastleBothBlack
+    , "Pawn that promotes disappears" ~: testPromotionPawnDisappears
+    , "Promoting pawn creates piece" ~: testPromotionNewPiece
+    , "Promoting can happen by taking" ~: testPromotionTake
     , "Castling Both" ~: testCastleBoth]
 
 allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp

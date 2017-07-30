@@ -2,15 +2,15 @@
 
 module Pgn (
     startGameFen
-  , pgnToMove
+  , pgnToMove, cleanPgn, pgnAsMoves
   , PgnType (Standard, WithColumn, WithRow, WithBoth)
   , possibleMoveFields
   , pgnPiece
-  , pgnToTargetField
+  , pgnToTargetField, pgnToPromotion
   , PgnTag (..)
   , tagParse
   , eventParse, siteParse, fullTagParse, parseAllTags
-  , parseGameMoves, moveParser, bothMoveParser, parseWholeGame
+  , parseGameMoves, moveParser, bothMoveParser, parseWholeGame, parseWholeGames
   , pgnGame
   , startingGS
   , moveToPgn) where
@@ -40,28 +40,39 @@ type PgnMove = String
 
 pgnParse :: PgnMove -> Color -> PgnMove
 pgnParse "O-O" White = "Kg1"
-pgnParse "O-O-O" White = "Kb1"
+pgnParse "O-O-O" White = "Kc1"
 pgnParse "O-O" Black = "Kg8"
-pgnParse "O-O-O" Black = "Kb8"
+pgnParse "O-O-O" Black = "Kc8"
 pgnParse p _ = p
+
+pgnToPromotion :: PgnMove -> (PgnMove, Maybe Piece)
+pgnToPromotion pgn
+  | end `elem` ("QNBR" :: String) = (init pgn, stringToPiece [end])
+  | otherwise = (pgn, Nothing)
+  where end = last pgn
+
+cleanPgn :: PgnMove -> Color -> PgnMove
+cleanPgn pgn color = withoutPromotion
+  where (withoutPromotion, _) = pgnToPromotion $ pgnParse pgn color
 
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
 possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
     where   
-            movePiece = pgnPiece pgn
             allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
-            targetField = pgnToTargetField pgn
+            (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgn
+            targetField = pgnToTargetField pgnWithoutPromotion
+            movePiece = pgnPiece pgnWithoutPromotion
             color = gsColor gs
-            movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv)]
+            movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv) && promotionPiece == movePromotionPiece mv]
             movesWithPiece = [(pfPiece pf, m) | (m, pf) <- movesWithPieceFields]
             pgnMoves = createPgnMoves gs movesWithPieceFields
 
 pgnToTargetField pgn = stringToField $ fmap Ch.toUpper $ reverse $ Data.List.take 2 $ reverse pgn
 
 pgnToMove :: GameState -> PgnMove -> Maybe (Piece, Move)
-pgnToMove gs pgn = listToMaybe [mv | (mv, pgnList) <- possibleMoveFields gs pgnCleaned, pgnCleaned `elem` pgnList]
+pgnToMove gs pgn = listToMaybe [mv | (mv, pgnList) <- possibleMoveFields gs (pgnParse pgn color), pgnCleaned `elem` pgnList]
     where color = gsColor gs
-          pgnCleaned = pgnParse pgn color
+          pgnCleaned = cleanPgn pgn color
 
 pgnPiece :: PgnMove -> Piece
 pgnPiece pgnMove
@@ -192,8 +203,6 @@ pgnGame pgnMoves = liftA2 Game startingGS $ sequence moves
 data Game = Game { startingGameState :: GameState, gameMoves :: [Move] } deriving Show
 data PgnGame = PgnGame { pgnGameTags :: [PgnTag], parsedPgnGame :: Game } deriving Show
 
--- In other words, IO gives me [Game]. Then use it.
-
 moveBegin = do
   many1' digit
   char '.'
@@ -219,13 +228,13 @@ whiteMoveParser = do
 singleMoveParser :: Parser String
 singleMoveParser = do
     first <- satisfy $ inClass "abcdefghKNBQRO"
-    rest <- many1' (letter <|> digit <|> char '#' <|> char 'x' <|> char '+' <|> char 'O' <|> char '-')
+    rest <- many1' (letter <|> digit <|> char '#' <|> char 'x' <|> char '+' <|> char '=' <|> char 'O' <|> char '-')
     return $ first : rest
 
 moveParser = bothMoveParser <|> whiteMoveParser
 
 filterMoves :: Char -> Bool
-filterMoves c = not $ c `elem` ("x#+" :: String)
+filterMoves c = not $ c `elem` ("x#+=" :: String)
 
 parseGameMoves :: Parser [String]
 parseGameMoves = do
@@ -236,10 +245,10 @@ parseWholeGame :: Parser (Maybe PgnGame)
 parseWholeGame = do
   tags <- parseAllTags
   endOfLine
-  -- let tags = []
-  -- many' $ char '\n'
   moves <- parseGameMoves
-  -- let moves = ["e4"]
-  -- many' (space <|> digit <|> char '-')
-  -- many' endOfLine
+  many' (space <|> digit <|> char '-' <|> char '/')
+  many' endOfLine
   return $ uncurry (liftA2 PgnGame) (Just tags, pgnGame moves)
+
+parseWholeGames :: Parser [Maybe PgnGame]
+parseWholeGames = many1' parseWholeGame

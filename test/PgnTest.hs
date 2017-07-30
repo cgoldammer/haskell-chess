@@ -125,6 +125,9 @@ movesGood = [
     , "1.e4 \nd5 \n2.exd5"
     , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O"
     , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O 8.Qe1 a6 9.a4 Qc7 10.Bd2 Rd8 11.e5 dxe5 12.fxe5 Nd5 13.Qg3 Nd4 14.Nxd4 Nxc3 15.bxc3 cxd4 16.cxd4 Rxd4 17.Qf2 Bf8 18.Ba5 Qd7"
+    , "1.d4 Nf6 2.Bg5 g6 3.Nf3 Bg7 4.e3 O-O 5.Bc4 d5 6.Bd3 Ne4 7.Bf4 c5 8.c3 Nc6 9.Bxe4 dxe4 10.Ng5 cxd4 11.exd4 e5 12.dxe5 Qxd1+ 13.Kxd1 Bg4+ 14.Kc1 Nxe5 15.Bxe5 Bxe5 16.Nxe4 Bf4+ 17.Kc2 Bf5 18.f3 Rfe8 19.Re1 Bxh2 20.Nd2 Bf4 21.Rad1 Kg7 22.Nb3 Rad8 23.Rxd8 Rxd8 24.Nd4 Re8 25.Kd3 h5 26.b4 Bd7 27.Re2 b6 28.g3 Bc7 29.Rg2 f5 30.Ng5 f4 31.g4 hxg4 32.Rh2 Bf5+ 33.Kd2 g3 34.Nxf5+ gxf5 35.Re2 Be5 36.Kd3 Kg6 37.Nh3 Kf6 38.Rc2 Rh8 39.Ng1 Rh1 40.Rc1 b5 41.c4 bxc4+ 42.Kxc4 Bc7 43.Kd5 Bb6 44.Rc6+ Kg5 45.Ne2 Re1 46.Nc3 g2 47.Rc8 g1=Q 48.Rg8+ Kf6 49.Rxg1 Bxg1 50.a4 Re3 51.Nb5 Rxf3 52.a5 Rb3 53.Kc4 Rb1"
+    , "1.d4 d5 2.Bg5 Nf6 3.e3 Bg4 4.Be2 Qd7 5.Nc3 Bxe2 6.Qxe2 Ne4 7.Nxe4 dxe4 8.f3 exf3 9.Nxf3 f6 10.Bf4 e6 11.e4 Be7 12.Qc4 Na6 13.O-O-O O-O-O 14.h4 Rhe8 15.Kb1 Bf8 16.a3 b5 17.Qd3 Qc6 18.c3 Nc5 19.Qc2 Qxe4 20.dxc5 Qxf4 21.Rxd8+ Rxd8 22.Nd4 Qe3 23.b4 a6 24.a4 e5 25.Nc6 Rd3 26.axb5 axb5 27.Na7+ Kb7 28.Nxb5 c6 29.Rd1 e4 30.Na3 Rxc3 31.Nc4 Rxc2 32.Nxe3 Re2 33.Nc4 Kc7 34.Nb6 Bxc5 35.bxc5 Rxg2 36.Rd7+ Kb8 37.Nc4 h5 38.Na5 e3 39.Nxc6+ Kc8 40.Re7 e2 41.Kc1 Rg1+ 42.Kd2 e1=Q+ 43.Rxe1 Rxe1 44.Kxe1 g5 45.hxg5 fxg5 46.Ke2 Kd7 47.Nd4 g4 48.Kd3 h4 49.Nf5 Ke6 50.Ke4 h3 51.Ng3 h2 52.Kd4 Ke7 53.Kd5"
+    , "1.d4 d5 2.Bg5 Nf6 3.e3 Bg4 4.Be2 Qd7 5.Nc3 Bxe2 6.Qxe2 Ne4 7.Nxe4 dxe4 8.f3 exf3 9.Nxf3 f6 10.Bf4 e6 11.e4 Be7 12.Qc4 Na6 13.O-O-O"
       ]
 
 testMovesBad :: String -> Test
@@ -159,12 +162,21 @@ secondToMove = fmap snd $ pgnToMove stateAfterFirst "e5"
 testFirst = TestCase $ assertEqual "Expected first move" (Just firstMove) firstToMove
 testSecond = TestCase $ assertEqual "Expected second move" (Just secondMove) secondToMove
 
+toGameState :: Position -> GameState
+toGameState ps = defaultGameState ps White
+stringToGs = toGameState . fromJust . stringToPosition
+newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stringToMove mvs
+gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
+
+testPromotionParse = TestCase $ assertBool error $ isJust mv
+  where mv = pgnToMove gsPromote "g8Q"
+        error = "Can parse promotion move"
+
 tagFilter :: Te.Text -> Bool
 tagFilter t = not (Te.null t) && (Te.head t == '[')
 
-
 testExternalPgn = TestCase $ do
-    gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/aronian1.pgn"
+    gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/manygames.pgn"
     let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
     let eitherTags = parseOnly parseAllTags $ Te.unlines tagPart
     assertBool ("Game tags not read: " ++ show tagPart) (isRight eitherTags)
@@ -176,6 +188,16 @@ testExternalPgn = TestCase $ do
     let eitherGame = parseOnly parseWholeGame gamePgn
     assertBool ("Game is not read: " ++ show eitherGame) (isRight eitherGame)
 
+testExternalPgns = TestCase $ do
+    gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
+    let number = 50
+    let needle = "[Event"
+    let gamePgn = Te.intercalate needle $ take (number + 1) $ Te.splitOn needle gamePgnRaw
+    let eitherGame = parseOnly parseWholeGames gamePgn
+    assertBool ("Game is not read: " ++ show eitherGame) (isRight eitherGame)
+    let games = catMaybes $ fromJust $ EitherC.rightToMaybe eitherGame
+    assertEqual ("Not all games parsed" ++ show games) number (length games)
+
 singleTests = [
       testPositionParse
     , testStartingFen
@@ -184,7 +206,11 @@ singleTests = [
     , testMultipleTags
     , testSingleMove
     , testFirst
-    , "Cannot read external PGN: " ~: testExternalPgn
+    , "PGN can read promotion move" ~: "e8N" ~: ("e8", Just Knight) ~=? (pgnToPromotion "e8N")
+    , "PGN can read promotion move" ~: "e8Q" ~: ("e8", Just Queen) ~=? (pgnToPromotion "e8Q")
+    , "Can parse promotion move" ~: testPromotionParse
+    , "Cannot read file with one PGN: " ~: testExternalPgn
+    , "Cannot read file with many PGNs: " ~: testExternalPgns
     , testSecond]
 
 testsMoveGood = fmap testMovesGood movesGood
@@ -195,13 +221,12 @@ pgnParseTests = pgnSimpleParse ++ pgnGameParse
 
 pgnTests = singleTests ++ pgnParseTests ++ testTags ++ testMoves
 
+ownPieces gs p = fmap pfField $ filter (\pf -> pfPiece pf == p) $ ownPieceFields gs
+pgnAlekhine = "1.d4 d5 2.Bg5 Nf6 3.e3 Bg4 4.Be2 Qd7 5.Nc3 Bxe2 6.Qxe2 Ne4 7.Nxe4 dxe4 8.f3 exf3 9.Nxf3 f6 10.Bf4 e6 11.e4 Be7 12.Qc4 Na6"
+mvv = fromJust $ EitherC.rightToMaybe $ parseOnly parseGameMoves pgnAlekhine
+fs = fromJust $ fst $ last $ pgnAsMoves mvv
 
-parseTes :: Parser Te.Text
-parseTes = do
-  char 'a'
-  s :: Te.Text <- string "hi"
-  endOfInput
-  return s
-    
-
+qu = [(p, moveFrom m, moveTo m) | (p, m) <-  allNextLegalMoves fs, p == Queen]
+ki = [(p, moveFrom m, moveTo m) | (p, m) <-  allNextLegalMoves fs, p == King]
+qu2 = [(moveFrom m, moveTo m) | m <- (allStandardMoves . invertGameStateColor) fs]
 
