@@ -28,6 +28,8 @@ import qualified Data.Char as Ch
 import Data.List
 import Data.Maybe
 import qualified Data.Text as Te
+import Data.Either
+import Data.Either.Combinators as EitherC
 
 import Board
 import Logic
@@ -37,10 +39,10 @@ import Debug.Trace
 type PgnMove = String
 
 pgnParse :: PgnMove -> Color -> PgnMove
-pgnParse "0-0" White = "Kg1"
-pgnParse "0-0-0" White = "Kb1"
-pgnParse "0-0" Black = "Kg8"
-pgnParse "0-0-0" Black = "Kb8"
+pgnParse "O-O" White = "Kg1"
+pgnParse "O-O-O" White = "Kb1"
+pgnParse "O-O" Black = "Kg8"
+pgnParse "O-O-O" Black = "Kb8"
 pgnParse p _ = p
 
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
@@ -100,13 +102,14 @@ startGameFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 gs = parseOnly parseFen (Te.pack startGameFen)
 startingGS = fromJust $ either (const Nothing) Just gs
 
-
-mv = ["e4", "e5", "Nf3", "Nc6", "Bc4", "b6"]
-a = pgnAsMoves mv
-gs' = fromJust $ fst $ Data.List.last a
-mv' = fromJust $ pgnToMove gs' "0-0"
-
-
+mv = "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O 8.Qe1 a6 9.a4 Qc7 10.Bd2 Rd8 11.e5 dxe5 12.fxe5 Nd5 13.Qg3 Nd4 14.Nxd4 Nxc3"
+parsedEither = parseOnly parseGameMoves $ Te.pack mv
+parsed = fromJust $ EitherC.rightToMaybe parsedEither
+a = pgnAsMoves parsed
+g = fromJust $ pgnGame parsed
+moves = gameMoves g
+gs' = fromJust $ tryMoves (Just startingGS) moves
+mv' = fromJust $ pgnToMove gs' "bxc3"
 
 -- s = move startingGS (Pawn, firstMove)
 -- s' = move s (Pawn, secondMove)
@@ -143,10 +146,10 @@ otherParse = do
   tagName <- many' letter
   space
   char '"'
-  event :: String <- many' $ letter <|> digit <|> space
+  event :: Te.Text <- Data.Attoparsec.Text.takeWhile (\c -> c /='\"')
   string "\"]"
   endOfLine
-  return $ PgnOther tagName event
+  return $ PgnOther tagName (Te.unpack event)
   
 data Player = Player {firstName :: String, lastName :: String} deriving (Show, Eq)
 
@@ -214,7 +217,10 @@ whiteMoveParser = do
   return [moveWhite]
 
 singleMoveParser :: Parser String
-singleMoveParser = (many1' (letter <|> digit <|> char '#' <|> char '+' <|> char '-'))
+singleMoveParser = do
+    first <- satisfy $ inClass "abcdefghKNBQRO"
+    rest <- many1' (letter <|> digit <|> char '#' <|> char 'x' <|> char '+' <|> char 'O' <|> char '-')
+    return $ first : rest
 
 moveParser = bothMoveParser <|> whiteMoveParser
 
@@ -224,14 +230,16 @@ filterMoves c = not $ c `elem` ("x#+" :: String)
 parseGameMoves :: Parser [String]
 parseGameMoves = do
   moves <- many1' moveParser
-  endOfInput
   return $ concat $ (fmap . fmap) (filter filterMoves) moves
 
 parseWholeGame :: Parser (Maybe PgnGame)
 parseWholeGame = do
   tags <- parseAllTags
   endOfLine
+  -- let tags = []
+  -- many' $ char '\n'
   moves <- parseGameMoves
-  many' (space <|> digit <|> char '-' <|> char '/')
-  many' endOfLine
+  -- let moves = ["e4"]
+  -- many' (space <|> digit <|> char '-')
+  -- many' endOfLine
   return $ uncurry (liftA2 PgnGame) (Just tags, pgnGame moves)

@@ -120,7 +120,11 @@ movesGood = [
     , "1.Nf3"
     , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3"
     , "1.e4 d5 2.exd5"
-    -- , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O"
+    , "1.e4 d5\n 2.exd5"
+    , "1.e4 d5 \n2.exd5"
+    , "1.e4 \nd5 \n2.exd5"
+    , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O"
+    , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3 Be7 7.O-O O-O 8.Qe1 a6 9.a4 Qc7 10.Bd2 Rd8 11.e5 dxe5 12.fxe5 Nd5 13.Qg3 Nd4 14.Nxd4 Nxc3 15.bxc3 cxd4 16.cxd4 Rxd4 17.Qf2 Bf8 18.Ba5 Qd7"
       ]
 
 testMovesBad :: String -> Test
@@ -158,6 +162,7 @@ testSecond = TestCase $ assertEqual "Expected second move" (Just secondMove) sec
 tagFilter :: Te.Text -> Bool
 tagFilter t = not (Te.null t) && (Te.head t == '[')
 
+
 testExternalPgn = TestCase $ do
     gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/aronian1.pgn"
     let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
@@ -166,10 +171,10 @@ testExternalPgn = TestCase $ do
     let (_, gamePart) = Te.breakOn "1." gamePgn
     let eitherMoves = parseOnly parseGameMoves gamePart
     assertBool ("Moves are not read: " ++ show gamePart ++ show eitherMoves) (isRight eitherMoves)
+    let eitherGameFromMoves = pgnGame $ fromJust $ EitherC.rightToMaybe eitherMoves
+    assertBool ("Moves are not a game: " ++ show eitherGameFromMoves) (isJust eitherGameFromMoves)
     let eitherGame = parseOnly parseWholeGame gamePgn
     assertBool ("Game is not read: " ++ show eitherGame) (isRight eitherGame)
-    let maybeGame = either (const Nothing) id eitherGame
-    assertBool ("Game is not parsed: " ++ (show maybeGame)) (1 == 2)
 
 singleTests = [
       testPositionParse
@@ -179,7 +184,7 @@ singleTests = [
     , testMultipleTags
     , testSingleMove
     , testFirst
-    -- , testExternalPgn
+    , "Cannot read external PGN: " ~: testExternalPgn
     , testSecond]
 
 testsMoveGood = fmap testMovesGood movesGood
@@ -188,7 +193,15 @@ testMoves = testsMoveGood ++ testsMoveNonParse
 
 pgnParseTests = pgnSimpleParse ++ pgnGameParse
 
-pgnTests = [] -- singleTests -- ++ pgnParseTests ++ testTags ++ testMoves
+pgnTests = singleTests ++ pgnParseTests ++ testTags ++ testMoves
 
+
+parseTes :: Parser Te.Text
+parseTes = do
+  char 'a'
+  s :: Te.Text <- string "hi"
+  endOfInput
+  return s
+    
 
 

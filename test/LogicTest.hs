@@ -127,6 +127,16 @@ testCastleBoth = TestCase $ assertEqual error (S.fromList movesExpected) interse
           possible = fmap snd $ allNextLegalMoves gsCastleBoth
           movesExpected = catMaybes $ fmap stringToMove ["E1C1", "E1G1"]
 
+posCastleBothBlack = fromJust $ stringToPosition ["WKE1", "BKE8", "BKA8", "BRH8"]
+gsCastleBothBlack = invertGameStateColor $ toGameState posCastleBothBlack
+
+testCastleBothBlack = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+    where error = "Both castling moves should be possible"
+          intersection = intersect possible movesExpected
+          possible = fmap snd $ allNextLegalMoves gsCastleBothBlack
+          movesExpected = catMaybes $ fmap stringToMove ["E8C8", "E8G8"]
+
+
 -- after white castles kingside (queenside), the rook is on f1 (c1)
 testRookField mv expectedField = TestCase $ assertEqual error (S.fromList expectedFields) intersection
     where error = "Rook expected on: "
@@ -204,6 +214,7 @@ singleTests = [
       "Opponent Move test" ~: oppMoveTest
     , "Pawn that is taken en passant disappears" ~: testEpDisappears
     , "Castling Queen" ~: testCastleQueen
+    , "Castling Both black" ~: testCastleBothBlack
     , "Castling Both" ~: testCastleBoth]
 
 allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp

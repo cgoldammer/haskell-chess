@@ -4,7 +4,7 @@
 
 module Logic (allPhysicalMoves, allPiecePhysicalMoves
             , GameState (GameState, gsPosition, gsColor)
-            , CastlingRights
+            , CastlingRights, castlingFree
             , defaultGameState
             , getPositions
             , invertGameStateColor
@@ -210,11 +210,23 @@ type MoveDirections = [Move]
 allStandardPhysicalMoves :: GameState -> PieceField -> [Move]
 allStandardPhysicalMoves gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = goodMoves
     where fields = pieceFields pf
-          goodFields = concat $ fmap (takeWhile isGood) fields
+          withCount = fmap (opponentNum opponentFields) fields
+          goodFields = concat $ fmap (takeWhile notOwn) $ (fmap . fmap) fst $ fmap (takeWhile (\(_, c) -> c <= 1)) withCount
           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
           goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
           goodMoves = concat $ fmap (addSpecialMoves piece color) goodMoveFilterPawn
-          isGood f = not $ f `elem` (fmap pfField (ownPieceFields gs))
+          notOwn f = not $ f `elem` (fmap pfField (ownPieceFields gs))
+          opponentFields = fmap pfField $ ownPieceFields $ invertGameStateColor gs
+          
+opponentCount :: [Field] -> [Field] -> Int -> [(Field, Int)]
+opponentCount fs [] n = zip fs (repeat n)
+opponentCount (f:rest) opfs n = (f, nextNum) : opponentCount rest opfs nextNum
+  where nextNum = if f `elem` opfs then n + 1 else n
+opponentCount [] _ _ = []
+
+opponentNum :: [Field] -> [Field] -> [(Field, Int)]
+opponentNum f f' = opponentCount f' f 0
+
 
 
 allPiecePhysicalMoves :: GameState -> PieceField -> [(Piece, Move)]
@@ -242,13 +254,11 @@ isTaking :: GameState -> Field -> Bool
 isTaking gs to = to `elem` (fmap pfField (opponentPieceFields gs))
 
 freeForCastling gs = [canCastleKingSide gs, canCastleQueenSide gs]
--- freeForCastling gs = [False, False]
 
 castlingMoves :: GameState -> [MoveLocation]
 castlingMoves gs
-  | gsColor gs == White = [(Field E R1, Field G R1), (Field E R1, Field C R1)]
-  | gsColor gs == Black = [(Field E R8, Field G R8), (Field E R8, Field C R8)]
-
+  | gsColor gs == White = [(e1, g1), (e1, c1)]
+  | gsColor gs == Black = [(e8, g8), (e8, c8)]
     
 possibleCastlingMoves :: GameState -> [MoveLocation]
 possibleCastlingMoves gs = catMaybes [useValueIfCondition m c | (m, c) <- zip (castlingMoves gs) (freeForCastling gs)]
@@ -260,9 +270,9 @@ useValueIfCondition a True = Just a
 
 canCastleKingSide :: GameState -> Bool
 canCastleKingSide (GameState pos White ((False, _), _)  _ _ _) = False
-canCastleKingSide (GameState pos Black ((_, False), _)  _ _ _) = False
+canCastleKingSide (GameState pos Black (_, (False, _))  _ _ _) = False
 canCastleKingSide gs@(GameState pos White ((True, _), _)  _ _ _) = notInCheck gs && castlingFree gs [f1, g1]
-canCastleKingSide gs@(GameState pos Black ((_, True), _)  _ _ _) = notInCheck gs && castlingFree gs [f8, g8]
+canCastleKingSide gs@(GameState pos Black (_, (True, _))  _ _ _) = notInCheck gs && castlingFree gs [f8, g8]
 
 canCastleQueenSide :: GameState -> Bool
 canCastleQueenSide gs@(GameState pos White ((_, False), _)  _ _ _) = False
@@ -347,9 +357,9 @@ pieceFields (PieceField Pawn color field) = movesFromSteps (pawnSteps field colo
 pawnSteps :: Field -> Color -> [[StepMove]]
 pawnSteps (Field _ R1) _ = []
 pawnSteps (Field _ R8) _ = []
-pawnSteps (Field _ R2) White = [[(-1, 1)], [(0, 1), (0, 2)], [(1, -1)]]
+pawnSteps (Field _ R2) White = [[(-1, 1)], [(0, 1), (0, 2)], [(1, 1)]]
 pawnSteps (Field _ _) White = [[(-1, 1)], [(0, 1)], [(1,1)]]
-pawnSteps (Field _ R7) Black = [[(-1, -1)], [(0, -1), (0, -2)], [(1,- 1)]]
+pawnSteps (Field _ R7) Black = [[(-1, -1)], [(0, -1), (0, -2)], [(1, -1)]]
 pawnSteps _ Black = [[(-1, -1)], [(0, -1)], [(1, -1)]]
 
 allPieceFields :: PieceField -> [Field]
