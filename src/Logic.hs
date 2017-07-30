@@ -8,8 +8,9 @@ module Logic (allPhysicalMoves, allPiecePhysicalMoves
             , defaultGameState
             , getPositions
             , invertGameStateColor
+            , ownPieceFields
             , allNextLegalMoves
-            , move, updatePositionMove
+            , move, updatePositionMove, moveToPieceMove, tryMoves
             , isMate
             , basicFen
             , fullFen
@@ -79,6 +80,17 @@ updatePositionMove gs (piece, mv@(Move from to promotion)) = GameState newPositi
             ept = enPassantTarget gs
             hm = halfMove gs
             fm = fullMove gs
+
+moveToPieceMove :: GameState -> Move -> (Piece, Move)
+moveToPieceMove gs mv = (movePiece gs mv, mv)
+
+tryMoves :: Maybe GameState -> [Move] -> Maybe GameState
+tryMoves Nothing _ = Nothing
+tryMoves (Just gs) [] = Just gs
+tryMoves (Just gs) (mv : rest) = if isLegalMove then tryMoves (Just (move gs pm)) rest else Nothing
+  where pm = moveToPieceMove gs mv
+        isLegalMove = elem mv $ fmap snd $ allNextLegalMoves gs
+
 
 move :: GameState -> (Piece, Move) -> GameState
 move gs (piece, mv@(Move from to promotion)) = GameState newPosition' newColor newCr newEp hm fm
@@ -152,8 +164,8 @@ updateCastlingRights gs mv = updatedBothRights where
         | color == Black = (castleWhite, updatedRights)
     kingMoved = movePiece gs mv == King
     color = gsColor gs
-    queenRookMoved = moveFrom mv == Field A R1
-    kingRookMoved = moveFrom mv == Field H R1
+    queenRookMoved = (color == White && moveFrom mv == a1) || (color == Black && moveFrom mv == a8)
+    kingRookMoved = (color == White && moveFrom mv == h1) || (color == Black && moveFrom mv == h8)
 
 allNextLegalMoves :: GameState -> [(Piece, Move)]
 allNextLegalMoves gs = filter notInCheck $ allPhysicalMoves gs

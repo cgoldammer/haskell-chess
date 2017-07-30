@@ -139,7 +139,6 @@ testRookFields = [
       testRookField "E1G1" "F1"
     , testRookField "E1C1" "C1"]
 
-
 gsWithCastling :: Position -> Color -> CastlingRights -> GameState
 gsWithCastling ps color cr = GameState ps color cr Nothing 0 1
 
@@ -166,21 +165,47 @@ testCastleQueen = TestCase $ assertEqual error (S.fromList movesExpected) inters
           possible = fmap snd $ allNextLegalMoves gsCastleQueen
           movesExpected = catMaybes $ fmap stringToMove ["E1C1"]
 
--- The same
--- ["WRA1", "WKE1", "WRH1", "BRG8", "BKH8"]
+testLosesRight mvs mvExpected = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+  where error = "Check that some castling rights are lost after moving: " ++ show mvs
+        movesExpected = catMaybes $ fmap stringToMove mvExpected
+        intersection = intersect possible movesExpected
+        possible = fmap snd $ allNextLegalMoves newState
+        newState = fromJust $ tryMoves (Just gsCastleBoth) $ catMaybes $ fmap stringToMove $ mvs
 
+testsLosesRight = [
+    testLosesRight ["E1F1", "G8F8", "F1E1", "F8G8"] []
+  , testLosesRight ["A1A2", "G8F8", "A2A1", "F8G8"] ["E1G1"]
+  , testLosesRight ["H1H2", "G8F8", "H2H1", "F8G8"] ["E1C1"]]
+    
 -- White to move can take ep iff the gamestate has an ep pawn on e5.
 -- If it's black's move, white can take ep on c6 (and only c6) iff black plays c5.
--- ["WKA1", "BKA8", "WPD5", "BDE5", "BPC7"]
+posEp = fromJust $ stringToPosition ["WKA1", "BKA8", "WPC2", "WPE2", "BPD4"]
+gsEp = toGameState posEp
 
--- If black is mate, he has no moves
--- ["WKA1", "WRA2", "WRB2", "BKA8"]
+testEp mvs mvExpected error = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+  where movesExpected = catMaybes $ fmap stringToMove mvExpected
+        intersection = intersect possible movesExpected
+        possible = fmap snd $ filter (\mp -> fst mp == Pawn) $ allNextLegalMoves newState
+        newState = fromJust $ tryMoves (Just gsEp) $ catMaybes $ fmap stringToMove $ mvs
+
+testsEp = [
+    testEp ["C2C4"] ["D4D3", "D4C3"] "Can take the c-pawn en passant"
+  , testEp ["E2E4"] ["D4D3", "D4E3"] "Can take the d-pawn en passant"
+  , testEp ["E2E4", "A8B8", "A1B1"] ["D4D3"] "Cannot take the c-pawn after intermediate moves"]
+
+testEpDisappears = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
+  where intersection = intersect whitePawnFields fieldsExpected
+        newState = fromJust $ tryMoves (Just gsEp) $ catMaybes $ fmap stringToMove ["C2C4", "D4C3"]
+        whitePawnFields = fmap pfField $ filter (\pf -> pfPiece pf == Pawn) $ ownPieceFields newState
+        fieldsExpected = [fromJust $ stringToField "E2"]
+        error = "Pawn that is taken ep disappears" ++ show newState
 
 singleTests = [
-      "Opponenet Move test" ~: oppMoveTest
+      "Opponent Move test" ~: oppMoveTest
+    , "Pawn that is taken en passant disappears" ~: testEpDisappears
     , "Castling Queen" ~: testCastleQueen
     , "Castling Both" ~: testCastleBoth]
 
-allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields
+allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp
 
 logicTests = allTests
