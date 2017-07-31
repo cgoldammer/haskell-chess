@@ -32,48 +32,34 @@ parseFirst :: Parser String = do
     return positionFen
 
 pos = fenStringToPosition . catMaybes . sequence . maybeResult . (parse parseFirst) . Te.pack $ startGameFen
-testPositionParse = TestCase $ assertBool ("Starting position parsed with : " ++ (show (length pos)) ++ show pos) (length pos == 32)
+startingPositionParseTest = length pos == 32 ~? "Starting position parsed with : " ++ (show (length pos)) ++ show pos
 
 
 fullMoves = [
       ("E2E4", Pawn, "e4")
     , ("G1F3", Knight, "Nf3")]
 
-moveTest :: String -> Piece -> String -> Test
-moveTest moveString piece pgnString = TestCase $ assertEqual "not equal simple pgn test" pgnString pgnMoveParse
+pgnEqualMoveTest :: String -> Piece -> String -> Test
+pgnEqualMoveTest moveString piece pgnString = pgnString ~=? pgnMoveParse
     where   pgnMoveParse = moveToPgn Standard mv pf
             mv = fromJust $ stringToMove moveString
             from = moveFrom mv
             pf = PieceField piece White from
 
-pgnSimpleParse = fmap (\(moveString, piece, pgnString) -> moveTest moveString piece pgnString) fullMoves
-
--- make sure a game can only be constructed by a function that checks that
--- all moves are legal
--- data Game 
-
+pgnEqualMoveTests = fmap (\(moveString, piece, pgnString) -> pgnEqualMoveTest moveString piece pgnString) fullMoves
 
 moves = [
       ("e4", "E2E4")
     , ("Nf3", "G1F3")]
 
-testPgnParse :: String -> String -> Test
-testPgnParse pgnMove moveString = TestCase $ assertEqual errorString parsedMove pgnMoveParse
+pgnSameGameAsMove :: String -> String -> Test
+pgnSameGameAsMove pgnMove moveString = pgnMoveParse ~=? parsedMove 
     where   parsedMove = stringToMove moveString
             pgnMoveParse = fmap snd $ pgnToMove startingGS pgnMove
-            errorString = "Pgn game parse"
 
-pgnGameParse = fmap (\(ms, pgnMove) -> testPgnParse ms pgnMove) moves
+pgnSameGameAsMoveTests = fmap (\(ms, pgnMove) -> pgnSameGameAsMove ms pgnMove) moves
 
-testCastlingParser = TestCase $ assertEqual "castling rights didn't parse" ((True, True), (True, True)) (castlingRightsParser "KQkq")
-
-
-
-
--- Can I parse a full game?
--- testResults :: IO [Move]
---     Tu.cd "/home/cg/haskell-chess/test/files"
---     results :: Te.Text <- Tu.strict $ Tu.input "./aronian1.pgn"
+testCastlingParser = ((True, True), (True, True)) ~=? castlingRightsParser "KQkq"
 
 tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
@@ -85,17 +71,15 @@ firstTags = Data.List.concat $ fmap fst tags
 firstTagsExpected = fmap snd tags
 
 testTag :: String -> PgnTag -> Test
-testTag s t = TestCase $ assertEqual "Expected tag" (Right t) parsed
-    where parsed = parseOnly fullTagParse (Te.pack s)
+testTag s t = Right t ~=? parseOnly fullTagParse (Te.pack s)
 
-testMultipleTags = TestCase $ assertEqual "Multiple tags" (Right firstTagsExpected) parsed
-    where parsed = parseOnly parseAllTags $ Te.pack firstTags
+testMultipleTags = Right firstTagsExpected ~=? parseOnly parseAllTags (Te.pack firstTags)
 
 testTags = fmap (uncurry testTag) tags
 
-
-testStringTag = TestCase $ assertEqual "Expected string tag" (Right expected) parsed
-    where parsed = parseOnly (tagParse "Event" $ many' $ letter <|> space <|> digit) $ Te.pack "[Event \"Wch U12\"]\n"
+testStringTag = Right expected ~=? parsed
+    where parsed = parser $ Te.pack $ "[Event \"" ++ expected ++ "\"]\n"
+          parser = parseOnly (tagParse "Event" $ many' $ letter <|> space <|> digit)
           expected = "Wch U12"
 
 movesNotParse = [
@@ -104,19 +88,19 @@ movesNotParse = [
     , "1. "
     ]
 
-movesBad = [
+movesNotLegal = [
       "1.e4 e5 2. Ne2 Nf6 3. Nc3"
     , "1.e1 c4"
     , "1.Nf4"
     , "1.Qd3"
     , "1. e4"
     ]
+
 movesGood = [
       "1.e4"
     , "1.e4 e5"
     , "1.e4 e5 2.Nf3"
     , "1.e4 e5 2.Nf3 Nf6 3.Nc3"
-    -- , "1. e4 Nf6 2. e5 Ne4 3. d3 Nc5 4. d4 Ne4 5. Qd3 d5 6. exd6 Nxd6 7. Nf3 b5 8. Bf4 e5 9. Bxe5 Bf5 10. Qb3 Nc6 11. Bxb5 Qd7 12. O-O Ne4 13. Nc3 a6 14. Ba4 Be6 15. d5 Bf5 16. Bxc6 Qxc6 17. dxc6 Bc5 18. Bxg7 Rg8 19. Ne5 Rxg7 20. Nxe4 Bxe4 21. g3 f5 22. Rad1 Bf3 23. Rd7 Rd8 24. Rxg7 Rd4 25. Qf7+ Kd8 26. Qg8+ Bf8 27. Qxf8#"  
     , "1.Nf3"
     , "1.e4 c5 2.Nc3 Nc6 3.f4 d6 4.Nf3 e6 5.Bc4 Nf6 6.d3"
     , "1.e4 d5 2.exd5"
@@ -130,21 +114,14 @@ movesGood = [
     , "1.d4 d5 2.Bg5 Nf6 3.e3 Bg4 4.Be2 Qd7 5.Nc3 Bxe2 6.Qxe2 Ne4 7.Nxe4 dxe4 8.f3 exf3 9.Nxf3 f6 10.Bf4 e6 11.e4 Be7 12.Qc4 Na6 13.O-O-O"
       ]
 
-testMovesBad :: String -> Test
-testMovesBad s = TestCase $ assertEqual error Nothing parsed
+testMovesNonParse :: String -> Test
+testMovesNonParse s = Nothing ~=? parsed
     where parsedEither = parseOnly parseGameMoves $ Te.pack s
           parsed = EitherC.rightToMaybe parsedEither
           error = "Shouldn't parse single but did: " ++ s ++ " | Parsed" ++ (show parsedEither)
 
-testSingleMove = TestCase $ assertEqual error Nothing parsed
-    where parsedEither = parseOnly bothMoveParser $ Te.pack mv
-          parsed = EitherC.rightToMaybe parsedEither
-          mv = "e4 e5"
-          error = "Shouldn't parse single but did: " ++ mv ++ " | Parsed" ++ (show parsedEither)
-          
-
 testMovesGood :: String -> Test
-testMovesGood s = TestCase $ assertBool error $ isJust game
+testMovesGood s = isJust game ~? error
     where parsedPgnMoves = EitherC.rightToMaybe $ parseOnly parseGameMoves $ Te.pack s -- Maybe [Move]
           game = join $ fmap pgnGame parsedPgnMoves -- Maybe Game
           error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
@@ -159,8 +136,6 @@ stateAfterSecond = move stateAfterFirst (Pawn, secondMove)
 firstToMove = fmap snd $ pgnToMove startingGS "e4"
 secondToMove = fmap snd $ pgnToMove stateAfterFirst "e5"
 
-testFirst = TestCase $ assertEqual "Expected first move" (Just firstMove) firstToMove
-testSecond = TestCase $ assertEqual "Expected second move" (Just secondMove) secondToMove
 
 toGameState :: Position -> GameState
 toGameState ps = defaultGameState ps White
@@ -179,54 +154,60 @@ testExternalPgn = TestCase $ do
     gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/manygames.pgn"
     let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
     let eitherTags = parseOnly parseAllTags $ Te.unlines tagPart
-    assertBool ("Game tags not read: " ++ show tagPart) (isRight eitherTags)
+    isRight eitherTags @? "Game tags not read: " ++ show tagPart
     let (_, gamePart) = Te.breakOn "1." gamePgn
     let eitherMoves = parseOnly parseGameMoves gamePart
-    assertBool ("Moves are not read: " ++ show gamePart ++ show eitherMoves) (isRight eitherMoves)
+    isRight eitherMoves @? "Moves are not read: " ++ show gamePart ++ show eitherMoves
     let eitherGameFromMoves = pgnGame $ fromJust $ EitherC.rightToMaybe eitherMoves
-    assertBool ("Moves are not a game: " ++ show eitherGameFromMoves) (isJust eitherGameFromMoves)
+    isJust eitherGameFromMoves @? "Moves are not a game: " ++ show eitherGameFromMoves
     let eitherGame = parseOnly parseWholeGame gamePgn
-    assertBool ("Game is not read: " ++ show eitherGame) (isRight eitherGame)
+    isRight eitherGame @? "Game is not read: " ++ show eitherGame
 
 testExternalPgns = TestCase $ do
-    gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
-    let number = 50
-    let needle = "[Event"
-    let gamePgn = Te.intercalate needle $ take (number + 1) $ Te.splitOn needle gamePgnRaw
-    let eitherGame = parseOnly parseWholeGames gamePgn
-    assertBool ("Game is not read: " ++ show eitherGame) (isRight eitherGame)
-    let games = catMaybes $ fromJust $ EitherC.rightToMaybe eitherGame
-    assertEqual ("Not all games parsed" ++ show games) number (length games)
+  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
+  let number = 1
+  let needle = "[Event"
+  let gamePgn = Te.intercalate needle $ take (number + 1) $ Te.splitOn needle gamePgnRaw
+  let eitherGame = parseOnly parseWholeGames gamePgn
+  isRight eitherGame @? "Game is not read: " ++ show eitherGame
+  let games = catMaybes $ fromJust $ EitherC.rightToMaybe eitherGame
+  assertEqual ("Not all games parsed" ++ show games) number (length games)
+
 
 singleTests = [
-      testPositionParse
-    , testStartingFen
-    , testCastlingParser
-    , testStringTag
-    , testMultipleTags
-    , testSingleMove
-    , testFirst
-    , "PGN can read promotion move" ~: "e8N" ~: ("e8", Just Knight) ~=? (pgnToPromotion "e8N")
-    , "PGN can read promotion move" ~: "e8Q" ~: ("e8", Just Queen) ~=? (pgnToPromotion "e8Q")
-    , "Can parse promotion move" ~: testPromotionParse
-    , "Cannot read file with one PGN: " ~: testExternalPgn
-    , "Cannot read file with many PGNs: " ~: testExternalPgns
-    , testSecond]
+    startingPositionParseTest
+  , testStartingFen
+  , testCastlingParser
+  , testStringTag
+  , testMultipleTags
+  , "First move not parsed" ~: Just firstMove ~=? firstToMove
+  , "Second move not parsed" ~: Just secondMove ~=? secondToMove
+  ]
 
-testsMoveGood = fmap testMovesGood movesGood
-testsMoveNonParse = fmap testMovesBad movesNotParse
-testMoves = testsMoveGood ++ testsMoveNonParse
+promotionTests = [
+    "PGN can read promotion move" ~: "e8N" ~: ("e8", Just Knight) ~=? (pgnToPromotion "e8N")
+  , "PGN can read promotion move" ~: "e8Q" ~: ("e8", Just Queen) ~=? (pgnToPromotion "e8Q")
+  , "Can parse promotion move" ~: testPromotionParse]
 
-pgnParseTests = pgnSimpleParse ++ pgnGameParse
+externalFileTests = [
+    "Cannot read file with one PGN: " ~: testExternalPgn
+  , "Cannot read file with many PGNs: " ~: testExternalPgns
+  ]
 
-pgnTests = singleTests ++ pgnParseTests ++ testTags ++ testMoves
+moveListTests = [
+    "Moves that should parse: " ~: fmap testMovesGood movesGood
+  , "Moves that should not parse: " ~: fmap testMovesNonParse movesNotParse
+  ]
 
-ownPieces gs p = fmap pfField $ filter (\pf -> pfPiece pf == p) $ ownPieceFields gs
-pgnAlekhine = "1.d4 d5 2.Bg5 Nf6 3.e3 Bg4 4.Be2 Qd7 5.Nc3 Bxe2 6.Qxe2 Ne4 7.Nxe4 dxe4 8.f3 exf3 9.Nxf3 f6 10.Bf4 e6 11.e4 Be7 12.Qc4 Na6"
-mvv = fromJust $ EitherC.rightToMaybe $ parseOnly parseGameMoves pgnAlekhine
-fs = fromJust $ fst $ last $ pgnAsMoves mvv
+pgnParseTests = pgnEqualMoveTests ++ pgnSameGameAsMoveTests
 
-qu = [(p, moveFrom m, moveTo m) | (p, m) <-  allNextLegalMoves fs, p == Queen]
-ki = [(p, moveFrom m, moveTo m) | (p, m) <-  allNextLegalMoves fs, p == King]
-qu2 = [(moveFrom m, moveTo m) | m <- (allStandardMoves . invertGameStateColor) fs]
+pgnTests = [
+    "Promotion tests: " ~: promotionTests
+  , "External file tests: " ~: externalFileTests
+  , "Assorted tests: " ~: singleTests
+  , "Pgn game parsing tests:" ~: pgnParseTests
+  , "Tag parsing" ~: testTags
+  , "Parsing move lists" ~: moveListTests]
+
+-- 86 tests total
 
