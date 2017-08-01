@@ -6,7 +6,7 @@ module Board (stringToPosition
             , Color (White, Black)
             , PieceField (PieceField, pfField, pfColor, pfPiece)
             , fieldToInt
-            , rowInt
+            , rowInt, colInt
             , intRow
             , invertColor
             , intColumn
@@ -163,6 +163,9 @@ columnInt c = fromJust $ elemIndex c allColumns
 
 rowInt :: Row -> Int
 rowInt r = (fromJust (elemIndex r allRows)) + 1
+
+colInt :: Column -> Int
+colInt r = (fromJust (elemIndex r allColumns)) + 1
 
 intRow :: Int -> Maybe Row
 intRow i = index (i - 1) allRows

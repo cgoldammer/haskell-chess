@@ -9,7 +9,9 @@ module Logic (allPhysicalMoves, allPiecePhysicalMoves
             , getPositions
             , invertGameStateColor
             , ownPieceFields
+            , reachableByBishop, reachableByRook
             , allNextLegalMoves, allStandardMoves, opponentCount, opponentNum
+            , filterOutInCheck
             , move, updatePositionMove, moveToPieceMove, tryMoves
             , isMate
             , basicFen
@@ -168,10 +170,6 @@ updateCastlingRights gs mv = updatedBothRights where
     queenRookMoved = (color == White && moveFrom mv == a1) || (color == Black && moveFrom mv == a8)
     kingRookMoved = (color == White && moveFrom mv == h1) || (color == Black && moveFrom mv == h8)
 
-allNextLegalMoves :: GameState -> [(Piece, Move)]
-allNextLegalMoves gs = filter notInCheck $ allPhysicalMoves gs
-    where notInCheck (piece, mv) = not (isChecking (updatePositionMove gs (piece, mv)))
-
 pieceFieldForMove :: GameState -> Move -> PieceField
 pieceFieldForMove gs mv = head [pf | pf <- gsPosition gs, moveFrom mv == pfField pf]
 
@@ -190,6 +188,9 @@ invertGameStateColor (GameState position color cr ept hm fm) = GameState positio
 
 allStandardMoves :: GameState -> [Move]
 allStandardMoves gs = concat $ fmap (allStandardPhysicalMoves gs) (ownPieceFields gs)
+
+allNextLegalMoves :: GameState -> [(Piece, Move)]
+allNextLegalMoves gs = filterOutInCheck gs $ allPhysicalMoves gs
     
 inCheck :: GameState -> Bool
 inCheck gs@(GameState ps color cr ept hm fm) = kingPosition `elem` (fmap Just opponentFields)
@@ -200,6 +201,31 @@ isChecking :: GameState -> Bool
 isChecking = inCheck . invertGameStateColor
             
 notInCheck = not . inCheck
+
+filterOutInCheckFull :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
+filterOutInCheckFull gs pms = filter notInCheck pms
+    where notInCheck (piece, mv) = not $ isChecking $ updatePositionMove gs (piece, mv)
+
+filterOutInCheck :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
+filterOutInCheck gs moves = legalKingMoves ++ notAffecting ++ (filterOutInCheckFull gs checkAffecting)
+  where opponentFields = fmap moveTo $ allStandardMoves . invertGameStateColor $ gs
+        (kingMoves, otherMoves) = partition (\(p, m) -> p == King) moves
+        legalKingMoves = filterOutInCheckFull gs kingMoves
+        color = gsColor gs
+        (checkAffecting, notAffecting) = partition (\(p, m) -> canAffectCheck kingField m) otherMoves
+        kingField = head $ fmap pfField $ filter (\pf -> pfPiece pf == King) $ ownPieceFields gs
+
+canAffectCheck kingField m = canReachKing kingField (moveTo m) || canReachKing kingField (moveFrom m)
+
+canReachKing :: Field -> Field -> Bool
+canReachKing f1 f2 = reachableByBishop f1 f2 || reachableByRook f1 f2
+
+reachableByBishop :: Field -> Field -> Bool
+reachableByBishop (Field c r) (Field c' r') = (ic - ir == ic' - ir') || (ir - ic == ic' - ir')
+  where (ic, ir, ic', ir') = (colInt c, rowInt r, colInt c', rowInt r')
+
+reachableByRook :: Field -> Field -> Bool
+reachableByRook (Field c r) (Field c' r') = (c == c') || (r == r')
 
 notCheckedOn :: GameState -> Field -> Bool
 notCheckedOn gs f = not $ f `elem` opponentFields

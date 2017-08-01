@@ -27,6 +27,7 @@ allBishopMoves = concat $ pieceFields $ PieceField Bishop White bishopPosition
 intersect :: Ord a => [a] -> [a] -> S.Set a
 intersect l1 l2 = S.intersection (S.fromList l1) (S.fromList l2)
 
+
 testFromString :: String -> [String] -> [String] -> [Field] -> [Test]
 testFromString name ps imps all = testPossible name psS impsS all
     where   psS = catMaybes $ fmap stringToField ps
@@ -57,6 +58,8 @@ nonMatePositions = [["WKA1", "BRA8", "BRB8", "BKB4"]]
 
 mateTest gs = TestCase (assertBool mateMessage (isMate gs))
     where mateMessage = "This should be mate, but isn't: " ++ (show gs)
+
+
 
 nonMateTest gs = TestCase (assertBool mateMessage (not (isMate gs)))
     where mateMessage = "This should not be mate, but is: " ++ (show gs)
@@ -244,8 +247,42 @@ testPromotionTake = TestCase $ assertEqual error (S.fromList fieldsExpected) int
         fieldsExpected = fieldsFromString []
         error = "The knight should be taken: " ++ show newState
 
+legalMoveData = [
+    (["WKA1", "BKA8"], ["A1A2", "A1B1", "A1B2"], ["A1B3"])
+  , (["WKA1", "BKA8", "BRB7"], ["A1A2"], ["A1B2"])
+  , (["WKA1", "BKA8", "WQA2", "BRA7"], ["A2A3"], ["A1A2", "A2B2", "A2A8"])
+  , (["WKA1", "BKA8", "WQB2", "BRA7"], ["B2A3"], ["B2B3", "B2A1"])
+  , (["WKA1", "BKA8", "BRA7", "BBH8"], ["A1B1"], ["A1B2", "A1B2"])
+  , (["WKA1", "BKA8", "BRA7", "WPA3", "BPB4"], ["A3A4"], ["A3B4"])]
+
+legalMoveTest gsString legalMoves = (S.fromList expected) ~=? actual
+  where actual = intersect expected legal
+        expected = fmap (fromJust . stringToMove) legalMoves
+        legal = fmap snd $ allNextLegalMoves $ stringToGs gsString
+
+
+illegalMoveTest gsString illegalMoves = expected ~=? actual
+  where expected = fmap (fromJust . stringToMove) illegalMoves
+        gState = stringToGs gsString
+        legalMoves = fmap snd $ allNextLegalMoves gState
+        actual = filter (\m -> not (m `elem` legalMoves)) expected
+
+
+legalMoveTests = ["Test legal moves are right" ~: legalMoveTest f s | (f, s, _) <- legalMoveData]
+illegalMoveTests = ["Test illegal moves are right" ~: illegalMoveTest f t | (f, _, t) <- legalMoveData]
+
+reachableTests = [
+    "Rook A1 A2" ~: reachableByRook (Field A R1) (Field A R2) ~?= True
+  , "Rook A1 C1" ~: reachableByRook (Field A R1) (Field C R1) ~?= True
+  , "Rook A1 C3" ~: reachableByRook (Field A R1) (Field C R3) ~?= False
+  , "Bishop A1 A2" ~: reachableByBishop (Field A R1) (Field A R2) ~?= False
+  , "Bishop A1 H8" ~: reachableByBishop (Field A R1) (Field H R8) ~?= True
+  , "Bishop H1 A8" ~: reachableByBishop (Field H R1) (Field A R8) ~?= True
+  ]
+
 singleTests = [
       "Opponent Move test" ~: oppMoveTest
+    , "Reachable tests" ~: reachableTests
     , "Pawn that is taken en passant disappears" ~: testEpDisappears
     , "Castling Queen" ~: testCastleQueen
     , "Castling Both black" ~: testCastleBothBlack
@@ -254,6 +291,6 @@ singleTests = [
     , "Promoting can happen by taking" ~: testPromotionTake
     , "Castling Both" ~: testCastleBoth]
 
-allTests = movesTests ++ possibleTests ++ checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp
+allTests = checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp ++ legalMoveTests ++ illegalMoveTests ++ movesTests ++ possibleTests
 
 logicTests = allTests

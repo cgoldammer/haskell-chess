@@ -52,6 +52,7 @@ executable profile-exe
                      , text
                      , attoparsec
                      , either
+                     , turtle
   default-language:    Haskell2010
 
 test-suite chess-test

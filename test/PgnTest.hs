@@ -207,7 +207,8 @@ pgnTests = [
   , "Assorted tests: " ~: singleTests
   , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
-  , "Parsing move lists" ~: moveListTests]
+  , "Parsing move lists" ~: moveListTests
+  ]
 
 -- 86 tests total
 
