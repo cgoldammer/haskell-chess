@@ -6,11 +6,10 @@ module Board (stringToPosition
             , Color (White, Black)
             , PieceField (PieceField, pfField, pfColor, pfPiece)
             , fieldToInt
-            , rowInt, colInt
+            , rowInt, columnInt
             , intRow
             , invertColor
             , intColumn
-            , columnInt
             , allRows
             , stringToPieceField
             , stringToField, stringToMove
@@ -72,7 +71,7 @@ shortPiece Bishop = "B"
 shortPiece Pawn = "P"
 
 shortColumn :: Column -> String
-shortColumn c = [['A'..'H'] !! (columnInt c)]
+shortColumn c = [['A'..'H'] !! ((columnInt c) - 1)]
 
 shortRow :: Row -> String
 shortRow r = show $ rowInt r
@@ -104,7 +103,6 @@ charColumn c = join $ fmap (flip index allColumns) (elemIndex c ['A'..'H'])
 charRow :: Char -> Maybe Row
 charRow r = join $ fmap (flip index allRows) (elemIndex r ['1'..'8'])
 
-
 stringToPiece :: String -> Maybe Piece
 stringToPiece "K" = Just King
 stringToPiece "R" = Just Rook
@@ -124,6 +122,10 @@ stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe
 stringToField _ = Nothing
 
 stringToMove :: String -> Maybe Move
+-- Todo
+-- Pawns (1 vs 2 moves, capturing diagonally, en passant, promotion)
+-- Castling
+
 stringToMove (c1 : c2 : c3 : c4 : rest) = join $ makeMaybe parseSucceeded $ liftM2 (\f t -> Move f t promotionPiece) from to
   where from = stringToField [c1, c2]
         to = stringToField [c3, c4]
@@ -134,9 +136,6 @@ stringToMove (c1 : c2 : c3 : c4 : rest) = join $ makeMaybe parseSucceeded $ lift
           Left Nothing -> (Nothing, True)
           Right Nothing -> (Nothing, False)
           Right val -> (val, True)
-
-
-
 
 
 stringToPieceField :: String -> Maybe PieceField 
@@ -159,18 +158,15 @@ invertColor White = Black
 invertColor Black = White
 
 columnInt :: Column -> Int
-columnInt c = fromJust $ elemIndex c allColumns
+columnInt c = (fromJust (elemIndex c allColumns)) + 1
 
 rowInt :: Row -> Int
 rowInt r = (fromJust (elemIndex r allRows)) + 1
-
-colInt :: Column -> Int
-colInt r = (fromJust (elemIndex r allColumns)) + 1
 
 intRow :: Int -> Maybe Row
 intRow i = index (i - 1) allRows
 
 intColumn :: Int -> Maybe Column
-intColumn = (flip index) allColumns
+intColumn i = index (i - 1) allColumns
 
 

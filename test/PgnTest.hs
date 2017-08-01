@@ -205,9 +205,9 @@ pgnTests = [
     "Promotion tests: " ~: promotionTests
   , "External file tests: " ~: externalFileTests
   , "Assorted tests: " ~: singleTests
-  , "Pgn game parsing tests:" ~: pgnParseTests
+  -- , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
-  , "Parsing move lists" ~: moveListTests
+  -- , "Parsing move lists" ~: moveListTests
   ]
 
 -- 86 tests total

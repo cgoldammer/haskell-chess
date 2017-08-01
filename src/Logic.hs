@@ -41,14 +41,11 @@ import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.ByteString.Char8 as C
 import Helpers
 import Data.List
--- Todo
--- Pawns (1 vs 2 moves, capturing diagonally, en passant, promotion)
--- Castling
-
 
 -- Defining fields that are checked often.
-[a1, b1, c1, d1, e1, f1, g1, h1] = fmap (fromJust . stringToField) [c : "1" | c <- ['A'..'H']]
-[a8, b8, c8, d8, e8, f8, g8, h8] = fmap (fromJust . stringToField) [c : "8" | c <- ['A'..'H']]
+rowFields row = fmap (fromJust . stringToField) [c : (show row) | c <- ['A'..'H']]
+[a1, b1, c1, d1, e1, f1, g1, h1] = rowFields 1 
+[a8, b8, c8, d8, e8, f8, g8, h8] = rowFields 8
 
 type CastlingRights = ((Bool, Bool), (Bool, Bool))
 
@@ -222,7 +219,7 @@ canReachKing f1 f2 = reachableByBishop f1 f2 || reachableByRook f1 f2
 
 reachableByBishop :: Field -> Field -> Bool
 reachableByBishop (Field c r) (Field c' r') = (ic - ir == ic' - ir') || (ir - ic == ic' - ir')
-  where (ic, ir, ic', ir') = (colInt c, rowInt r, colInt c', rowInt r')
+  where (ic, ir, ic', ir') = (columnInt c, rowInt r, columnInt c', rowInt r')
 
 reachableByRook :: Field -> Field -> Bool
 reachableByRook (Field c r) (Field c' r') = (c == c') || (r == r')
@@ -230,7 +227,6 @@ reachableByRook (Field c r) (Field c' r') = (c == c') || (r == r')
 notCheckedOn :: GameState -> Field -> Bool
 notCheckedOn gs f = not $ f `elem` opponentFields
   where opponentFields = fmap moveTo $ allStandardMoves . invertGameStateColor $ gs
-
 
 type MoveDirections = [Move]
 
