@@ -8,10 +8,17 @@ import Data.Maybe
 import LogicTest
 import PgnTest
 import StringParseTest
+import StockfishTest
 
 main :: IO ()
 main = do
     runTestTT tests
+    -- runTestTT stockfishTests
     return ()
 
-tests = TestList $ logicTests ++ stringParseTests ++ pgnTests
+tests = TestList [
+    "Logic tests: " ~: logicTests
+  , "String parse tests: " ~: stringParseTests
+  , "Pgn game parsing tests:" ~: pgnTests
+  , "Stockfish tests" ~: stockfishTests
+  ]
