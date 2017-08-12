@@ -109,7 +109,7 @@ moveToPgnHelper withColumn withRow mv pf = concat $ catMaybes values
 pgnPieceChar :: Piece -> String
 pgnPieceChar piece = filter (not . (`elem` ("P"::String))) $ shortPiece piece
 
-startGameFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+startGameFen = "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 gs = parseOnly parseFen (Te.pack startGameFen)
 startingGS = fromJust $ either (const Nothing) Just gs
 

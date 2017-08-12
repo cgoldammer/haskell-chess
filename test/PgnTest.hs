@@ -24,16 +24,8 @@ import qualified Turtle as Tu
 moveString = ["e4", "e5", "Ne2", "Nc6", "N2c3"]
 expected = ["E2E4", "E7E5", "G1E2", "B8C6", "E2C3"]
 
-gs = parseOnly parseFen (Te.pack startGameFen)
-testStartingFen = TestCase $ assertBool ("Starting game state not parsed" ++ show gs) (isRight gs)
-
-parseFirst :: Parser String = do
-    positionFen :: String <- many (letter <|> digit <|> (char '/'))
-    return positionFen
-
-pos = fenStringToPosition . catMaybes . sequence . maybeResult . (parse parseFirst) . Te.pack $ startGameFen
-startingPositionParseTest = length pos == 32 ~? "Starting position parsed with : " ++ (show (length pos)) ++ show pos
-
+pos = gsPosition . fromJust . fenToGameState $ startGameFen
+startingPositionParseTest = 32 ~=? length pos
 
 fullMoves = [
       ("E2E4", Pawn, "e4")
@@ -176,7 +168,6 @@ testExternalPgns = TestCase $ do
 
 singleTests = [
     startingPositionParseTest
-  , testStartingFen
   , testCastlingParser
   , testStringTag
   , testMultipleTags
@@ -205,9 +196,9 @@ pgnTests = [
     "Promotion tests: " ~: promotionTests
   , "External file tests: " ~: externalFileTests
   , "Assorted tests: " ~: singleTests
-  -- , "Pgn game parsing tests:" ~: pgnParseTests
+  , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
-  -- , "Parsing move lists" ~: moveListTests
+  , "Parsing move lists" ~: moveListTests
   ]
 
 -- 86 tests total

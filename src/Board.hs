@@ -14,7 +14,7 @@ module Board (stringToPosition
             , stringToPieceField
             , stringToField, stringToMove
             , stringToPiece
-            , colorString
+            , colorString, colorToString
             , allColumns
             , shortPiece, shortColumn, shortRow, shortField
             , Column (A, B, C, D, E, F, G, H)
@@ -116,6 +116,10 @@ colorString :: String -> Maybe Color
 colorString "W" = Just White
 colorString "B" = Just Black
 colorString _ = Nothing
+
+colorToString :: Color -> String
+colorToString White = "W"
+colorToString Black = "B"
 
 stringToField :: String -> Maybe Field
 stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe [r])))

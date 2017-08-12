@@ -20,7 +20,7 @@ module Logic (allPhysicalMoves, allPiecePhysicalMoves
             , inCheck
             , pieceFields
             , pieceFieldForMove
-            , parseFen
+            , parseFen, fenToGameState, gameStateToFen
             , castlingRightsParser
             , allOpponentMoves
             , fenStringToPosition
@@ -34,11 +34,12 @@ import Control.Monad
 import Control.Applicative
 import qualified Data.String.Utils as SU
 import qualified Data.Char as C
-import qualified Data.Text as T
+import qualified Data.Text as Te
 import qualified Text.Read as TR
 import Data.Attoparsec.Text hiding (take, D, takeWhile)
 import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.ByteString.Char8 as C
+import qualified Data.Either.Combinators as EitherC
 import Helpers
 import Data.List
 
@@ -115,7 +116,7 @@ isCastling :: Piece -> Move -> Bool
 isCastling King (Move from to mp) = (from == e1 && (to == g1 || to == c1)) || (from == e8 && (to == g8 || to == c8))
 isCastling _ _ = False
 
-type CastleKingside = Bool
+type CastleKingSide = Bool
 
 updatePosition :: Position -> Field -> Field -> Position
 updatePosition ps field newField = newPf : [p | p <- ps, p /= pf]
@@ -124,7 +125,7 @@ updatePosition ps field newField = newPf : [p | p <- ps, p /= pf]
           piece = pfPiece pf
           color = pfColor pf
 
-updateCastlingRook :: CastleKingside -> Color -> Position -> Position
+updateCastlingRook :: CastleKingSide -> Color -> Position -> Position
 updateCastlingRook True White ps = updatePosition ps h1 f1
 updateCastlingRook False White ps = updatePosition ps a1 d1
 updateCastlingRook True Black ps = updatePosition ps h8 f8
@@ -149,23 +150,16 @@ nextRow r Black = intRow $ (rowInt r) - 1
 
 updateCastlingRights :: GameState -> Move -> CastlingRights
 updateCastlingRights gs mv = updatedBothRights where
+    (castleWhite, castleBlack) = castlingRights gs
+    (castleK, castleQ) = if color == White then castleWhite else castleBlack
     updatedRights = (castleK && (not castleKLost), castleQ && (not castleQLost))
-    castleWhite = fst cr
-    castleBlack = snd cr
-    cr = castlingRights gs
-    (castleK, castleQ) = rights
-    rights 
-        | color == White = castleWhite
-        | color == Black = castleBlack
-    castleKLost = kingMoved || kingRookMoved
-    castleQLost = kingMoved || queenRookMoved
-    updatedBothRights
-        | color == White = (updatedRights, castleBlack)
-        | color == Black = (castleWhite, updatedRights)
-    kingMoved = movePiece gs mv == King
+    updatedBothRights = if color == White then (updatedRights, castleBlack) else (castleWhite, updatedRights)
     color = gsColor gs
+    kingMoved = movePiece gs mv == King
     queenRookMoved = (color == White && moveFrom mv == a1) || (color == Black && moveFrom mv == a8)
     kingRookMoved = (color == White && moveFrom mv == h1) || (color == Black && moveFrom mv == h8)
+    castleKLost = kingMoved || kingRookMoved
+    castleQLost = kingMoved || queenRookMoved
 
 pieceFieldForMove :: GameState -> Move -> PieceField
 pieceFieldForMove gs mv = head [pf | pf <- gsPosition gs, moveFrom mv == pfField pf]
@@ -174,7 +168,7 @@ allNextStates :: GameState -> [GameState]
 allNextStates gs = fmap (move gs) (allNextLegalMoves gs)
 
 isMate :: GameState -> Bool
-isMate gs = noNextMoves && (inCheck gs)
+isMate gs = noNextMoves && inCheck gs
     where noNextMoves = length (allNextLegalMoves gs) == 0
 
 allOpponentMoves :: GameState -> [(Piece, Move)]
@@ -289,18 +283,19 @@ useValueIfCondition :: a -> Bool -> Maybe a
 useValueIfCondition a False = Nothing
 useValueIfCondition a True = Just a
 
+hasCastlingRight :: Color -> CastleKingSide -> CastlingRights -> Bool
+hasCastlingRight White True ((x, _), _) = x
+hasCastlingRight White False ((_, x), _) = x
+hasCastlingRight Black True (_, (x, _)) = x
+hasCastlingRight Black False (_, (_, x)) = x
 
 canCastleKingSide :: GameState -> Bool
-canCastleKingSide (GameState pos White ((False, _), _)  _ _ _) = False
-canCastleKingSide (GameState pos Black (_, (False, _))  _ _ _) = False
-canCastleKingSide gs@(GameState pos White ((True, _), _)  _ _ _) = notInCheck gs && castlingFree gs [f1, g1]
-canCastleKingSide gs@(GameState pos Black (_, (True, _))  _ _ _) = notInCheck gs && castlingFree gs [f8, g8]
+canCastleKingSide gs@(GameState pos White cr  _ _ _) = hasCastlingRight White True cr && notInCheck gs && castlingFree gs [f1, g1]
+canCastleKingSide gs@(GameState pos Black cr  _ _ _) = hasCastlingRight Black True cr && notInCheck gs && castlingFree gs [f8, g8]
 
 canCastleQueenSide :: GameState -> Bool
-canCastleQueenSide gs@(GameState pos White ((_, False), _)  _ _ _) = False
-canCastleQueenSide gs@(GameState pos Black (_, (_, False))  _ _ _) = False
-canCastleQueenSide gs@(GameState pos White ((_, True), _)  _ _ _) = notInCheck gs && castlingFree gs [d1, c1] && freeField gs b1
-canCastleQueenSide gs@(GameState pos Black (_, (_, True))  _ _ _) = notInCheck gs && castlingFree gs [d8, c8] && freeField gs b8
+canCastleQueenSide gs@(GameState pos White cr  _ _ _) = hasCastlingRight White False cr && notInCheck gs && castlingFree gs [d1, c1] && freeField gs b1
+canCastleQueenSide gs@(GameState pos Black cr  _ _ _) = hasCastlingRight Black False cr && notInCheck gs && castlingFree gs [d8, c8] && freeField gs b8
 
 freeField :: GameState -> Field -> Bool
 freeField gs f = not $ elem f $ fmap pfField $ gsPosition gs
@@ -312,13 +307,6 @@ castlingFree gs fs = and $ fmap (\f -> (notCheckedOn gs f) && (freeField gs f)) 
 -- In the EP case, remove the pawn that's EP taken
 isEnPassant :: GameState -> MoveLocation -> Bool
 isEnPassant gs ml@(from, to) = enPassantTarget gs == Just to
-
-
--- Update the castling permissions
--- In the castles case, move the rook as well as the King
-
-
-
 
 addSpecialMoves :: Piece -> Color -> MoveLocation -> [Move]
 addSpecialMoves Pawn White ml@((Field _ R7), _) = addPromotionMoves ml
@@ -338,18 +326,12 @@ allPhysicalMoves :: GameState -> [(Piece, Move)]
 allPhysicalMoves gs = concat $ fmap (allPiecePhysicalMoves gs) (ownPieceFields gs)
 
 fieldStep :: Field -> (Int, Int) -> Maybe Field
-fieldStep (Field c r) (x, y) = maybeFromCondition (Field newCol newRow) allLegit
+fieldStep (Field c r) (x, y) = makeMaybe allLegit $ Field newCol newRow
     where   cInt = columnInt c
             rInt = rowInt r
-            newX = (cInt + x)
-            newY = (rInt + y)
-            newCol = fromJust $ intColumn newX
-            newRow = fromJust $ intRow newY
-            allLegit = (isJust (intColumn newX)) && (isJust (intRow newY))
-
-maybeFromCondition :: a -> Bool -> Maybe a
-maybeFromCondition _ False = Nothing
-maybeFromCondition a _ = Just a
+            (newX, newY) = (cInt + x, rInt + y)
+            (newCol, newRow) = (fromJust (intColumn newX), fromJust (intRow newY))
+            allLegit = isJust (intColumn newX) && isJust (intRow newY)
 
 range :: Bool -> [Int]
 range True = [1..7]
@@ -399,13 +381,6 @@ selectByPosition ps fs = filter (\pf -> (elem (pfField pf) fs)) ps
 
 
 type Fen = String
--- We want to prevent users from constructing Fen's without validating
--- them. The newtype is not exported, thus obtaining a ValidatedFen
--- requires using the `constructFen` function
-newtype ValidatedFen = ValidatedFen Fen
-
-constructFen :: String -> Maybe ValidatedFen
-constructFen = undefined
 
 pieceFieldFen :: Maybe PieceField -> Char
 pieceFieldFen Nothing = '1'
@@ -440,6 +415,17 @@ basicFen ps = intercalate "/" $ fmap (aggregator . basicFenFromRow) $ positionBy
 
 aggregator s = foldl (flip ($)) s (fmap aggregateFen (reverse [1..8]))
 
+gameStateToFen :: GameState -> Fen
+gameStateToFen gs@(GameState ps color cr ept hm fm) = intercalate " " elements
+  where elements = ["fen", positionFen, col, castleString, epString, show hm, show fm]
+        positionFen = basicFen ps
+        col = fmap C.toLower $ colorToString color 
+        castleString = castlingRightsToString cr
+        epString = epToString ept
+
+epToString :: Maybe Field -> String
+epToString (Just f) = fmap C.toLower $ shortField f
+epToString Nothing = "-"
 
 fullFen :: Position -> Fen
 fullFen ps = "fen " ++ basicFen ps ++ " w - 0 1"
@@ -472,16 +458,19 @@ asRepeated x
   | x `elem` ['1'..'8'] = take (read [x] :: Int) (repeat '0')
   | otherwise = [x]
 
+fenToGameState :: String -> Maybe GameState
+fenToGameState = EitherC.rightToMaybe . parseOnly parseFen . Te.pack
 
 parseFen :: Parser GameState
 parseFen = do
+  string "fen "
   positionFen :: String <- many1' (letter <|> digit <|> (char '/'))
   let position = fenStringToPosition positionFen
   space
   playerToMoveString :: Char <- (char 'w' <|> char 'b')
   let playerToMove = fromJust $ colorString [C.toUpper playerToMoveString]
   space
-  castlingRightsString :: String <- many1' (char 'K' <|> char 'Q' <|> char 'q' <|> char 'k')
+  castlingRightsString :: String <- many1' (char 'K' <|> char 'Q' <|> char 'q' <|> char 'k' <|> char '-')
   let castlingRights = castlingRightsParser castlingRightsString
   space
   epTargetString :: String <- many1' (letter <|> digit <|> char '-')
@@ -491,8 +480,6 @@ parseFen = do
   space
   fullMove :: Int <- decimal
   endOfInput
-  -- let halfMove = 1
-  -- let fullMove = 1
   return $ GameState position playerToMove castlingRights epTarget halfMove fullMove
 
 castlingRightsParser :: String -> CastlingRights
@@ -503,9 +490,22 @@ castlingRightsParser s = ((wk, wq), (bk, bq))
     wq = 'Q' `elem` s
     bq = 'q' `elem` s
 
--- sortedFields = [(col, row) | col <- allColumns, row <- allRows]
+castlingRightsToString :: CastlingRights -> String
+castlingRightsToString ((wk, wq), (bk, bq)) = if length concatenated > 0 then concatenated else "-"
+  where wkC = castlingRightsChar wk White True
+        wqC = castlingRightsChar wq White False
+        bkC = castlingRightsChar bk Black True
+        bqC = castlingRightsChar bq Black False
+        values = [wkC, wqC, bkC, bqC]
+        concatenated = concat values
+
+castlingRightsChar :: Bool -> Color -> Bool -> String
+castlingRightsChar True White True = "K"
+castlingRightsChar True White False = "Q"
+castlingRightsChar True Black True = "k"
+castlingRightsChar True Black False = "q"
+castlingRightsChar False _ _ = ""
 
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
           (toX, toY) = fieldToInt to
-

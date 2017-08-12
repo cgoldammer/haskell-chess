@@ -6,6 +6,7 @@ import Board
 import Logic
 import Various
 import qualified Data.Set as S
+import qualified Data.Text as Te
 import Data.Maybe
 
 rookPosition = Field A R1
@@ -268,6 +269,19 @@ illegalMoveTest gsString illegalMoves = expected ~=? actual
         actual = filter (\m -> not (m `elem` legalMoves)) expected
 
 
+fensToConvert = [
+    "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+  , "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1"
+  , "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b kq - 0 1"
+  , "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - - 20 1"
+  , "fen rnbqkbnr/ppp2ppp/4p3/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 1 1"]
+
+-- If I take a fen, convert it to a gamestate, and then back to a fen, I should get the
+-- initial fen back.
+fenDoubleConvertTest f = Just f ~=? fmap gameStateToFen (fenToGameState f)
+
+fenDoubleConvertTests = TestList $ fmap fenDoubleConvertTest fensToConvert
+
 legalMoveTests = ["Test legal moves are right" ~: legalMoveTest f s | (f, s, _) <- legalMoveData]
 illegalMoveTests = ["Test illegal moves are right" ~: illegalMoveTest f t | (f, _, t) <- legalMoveData]
 
@@ -291,6 +305,19 @@ singleTests = [
     , "Promoting can happen by taking" ~: testPromotionTake
     , "Castling Both" ~: testCastleBoth]
 
-allTests = checkTests ++ isCheckTests ++ mateTests ++ pawnTests ++ singleTests ++ testCastleOneSide ++ testRookFields ++ testsLosesRight ++ testsEp ++ legalMoveTests ++ illegalMoveTests ++ movesTests ++ possibleTests
+logicTests = TestList [
+    "Check tests" ~: checkTests
+  , "is check tests" ~: isCheckTests
+  , "mate tests" ~: mateTests
+  , "pawn tests" ~: pawnTests
+  , "single tests" ~: singleTests
+  , "castle one side" ~: testCastleOneSide
+  , "rook fields" ~: testRookFields
+  , "losing castling rights" ~: testsLosesRight
+  , "En passant" ~: testsEp
+  , "Legal moves" ~: legalMoveTests
+  , "illegal moves" ~: illegalMoveTests
+  , "moves" ~: movesTests
+  , "possible" ~: possibleTests
+  , "fen double conversion" ~: fenDoubleConvertTests]
 
-logicTests = allTests
