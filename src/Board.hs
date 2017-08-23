@@ -16,7 +16,7 @@ module Board (stringToPosition
             , stringToPiece
             , colorString, colorToString
             , allColumns
-            , shortPiece, shortColumn, shortRow, shortField
+            , shortPiece, shortColumn, shortRow, shortField, shortMove
             , Column (A, B, C, D, E, F, G, H)
             , Row (R1, R2, R3, R4, R5, R6, R7, R8)
             , Move (Move, moveFrom, moveTo, movePromotionPiece)
@@ -47,10 +47,23 @@ allNonPawnPieces = [King .. Knight]
 data Color = White | Black deriving (Enum, Ord, Eq)
 
 data Field = Field { fieldColumn :: Column, fieldRow :: Row } deriving (Eq, Ord)
-data Move = Move {moveFrom :: Field, moveTo :: Field, movePromotionPiece :: Maybe Piece} deriving (Eq, Show, Ord)
+data Move = Move {moveFrom :: Field, moveTo :: Field, movePromotionPiece :: Maybe Piece} deriving (Eq, Ord)
 type MoveLocation = (Field, Field)
 data PieceField = PieceField {pfPiece :: Piece, pfColor :: Color, pfField :: Field} deriving (Eq)
 type Position = [PieceField]
+
+instance Show Move where
+  show = shortMove
+
+shortMove :: Move -> String
+shortMove (Move from to pr) = fromS ++ toS ++ p
+  where fromS = shortField from
+        toS = shortField to
+        p = prShow pr
+    
+prShow :: Maybe Piece -> String
+prShow Nothing = ""
+prShow (Just p) = shortPiece p
 
 fieldColor :: Field -> Color
 fieldColor (Field c r)
@@ -126,10 +139,6 @@ stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe
 stringToField _ = Nothing
 
 stringToMove :: String -> Maybe Move
--- Todo
--- Pawns (1 vs 2 moves, capturing diagonally, en passant, promotion)
--- Castling
-
 stringToMove (c1 : c2 : c3 : c4 : rest) = join $ makeMaybe parseSucceeded $ liftM2 (\f t -> Move f t promotionPiece) from to
   where from = stringToField [c1, c2]
         to = stringToField [c3, c4]

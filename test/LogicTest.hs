@@ -68,8 +68,11 @@ nonMateTest gs = TestCase (assertBool mateMessage (not (isMate gs)))
 toGameState :: Position -> GameState
 toGameState ps = defaultGameState ps White
 
-mates = fmap toGameState $ catMaybes (fmap stringToPosition matePositions)
-nonMates = fmap toGameState $ catMaybes (fmap stringToPosition nonMatePositions)
+toGameStateNoCastle :: Position -> GameState
+toGameStateNoCastle ps = defaultGameStateNoCastle ps White
+
+mates = fmap toGameStateNoCastle $ catMaybes (fmap stringToPosition matePositions)
+nonMates = fmap toGameStateNoCastle $ catMaybes (fmap stringToPosition nonMatePositions)
 
 allNextFields = []
 movesTest expected ps = TestCase (assertBool errorMessage (movesCalculated == movesExpected))
@@ -117,8 +120,11 @@ pawnToMoves :: GameState -> [Move]
 pawnToMoves gs = allPawnToFields
     where   allPawnFields = getPositions gs Pawn
             allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (moveFrom mv) `elem` allPawnFields]
-pawnTests = pawnTestWhite ++ pawnTestBlack ++ pawnTestBlackEP ++ pawnTestPromote
-
+pawnTests = TestList [
+    "white" ~: pawnTestWhite
+  , "black" ~: pawnTestBlack
+  , "en passant" ~: pawnTestBlackEP
+  , "promote" ~: pawnTestPromote]
 
 
 -- all castling combinations should be possible, thus depend on the gamestate castling rights.
@@ -192,7 +198,7 @@ testsLosesRight = [
   , testLosesRight ["H1H2", "G8F8", "H2H1", "F8G8"] ["E1C1"]]
     
 -- After a promotion, the initial pawn disappears
-stringToGs = toGameState . fromJust . stringToPosition
+stringToGs = toGameStateNoCastle . fromJust . stringToPosition
 newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stringToMove mvs
 
 -- White to move can take ep iff the gamestate has an ep pawn on e5.
@@ -215,7 +221,7 @@ ownPieces gs p = fmap pfField $ filter (\pf -> pfPiece pf == p) $ ownPieceFields
 
 fieldsFromString s = fmap (fromJust . stringToField) s
 
-testEpDisappears = TestCase $ assertEqual error (S.fromList fieldsExpected) intersection
+testEpDisappears = TestCase $ assertEqual error (S.fromList whiteFields) intersection
   where intersection = intersect whiteFields fieldsExpected
         newState = newStateFromMoves gsEp ["C2C4", "D4C3"]
         whiteFields = ownPieces newState Pawn
@@ -319,5 +325,6 @@ logicTests = TestList [
   , "illegal moves" ~: illegalMoveTests
   , "moves" ~: movesTests
   , "possible" ~: possibleTests
-  , "fen double conversion" ~: fenDoubleConvertTests]
+  , "fen double conversion" ~: fenDoubleConvertTests
+  ]
 

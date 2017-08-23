@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
-module Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove) where
+module Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
 
 import Board
 import Logic
@@ -28,19 +28,28 @@ bestMoves :: Fen -> Int -> Int -> IO [StockfishMove]
 bestMoves fen moveTime number = do
   Tu.cd "/home/cg/haskell-chess/scripts/"
   let arguments = fmap quoteString [fen, show moveTime, show number]
+  let gs = fromJust $ fenToGameState fen
+  let color = gsColor gs
   let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
   Tu.shell command empty
+  print command
   moves <- readResults number
-  return moves
+  let movesStandardized = if color == White then moves else fmap invertEval moves
+  return movesStandardized
+
+
+resultLines :: Int -> IO [Te.Text]
+resultLines number = do
+  Tu.cd "/home/cg/haskell-chess/scripts/"
+  results :: Te.Text <- Tu.strict $ Tu.input "./results.txt"
+  let lines =  Te.splitOn "\n" results
+  let filt = \t -> not $ (Te.pack "upperbound") `Te.isInfixOf` t
+  return $ filter filt lines
 
 readResults :: Int -> IO [StockfishMove]
 readResults number = do
-    Tu.cd "/home/cg/haskell-chess/scripts/"
-    results :: Te.Text <- Tu.strict $ Tu.input "./results.txt"
-    let lines =  Te.splitOn "\n" results
-    let filt = \t -> not $ (Te.pack "upperbound") `Te.isInfixOf` t
-    let moves = readMoves (filter filt lines) number
-    return moves
+  lines <- resultLines number
+  return $ readMoves lines number
 
 readMoves :: [Te.Text] -> Int -> [StockfishMove]
 readMoves t number = reverse $ sortOn sortMove $ catMaybes $ fmap (EitherC.rightToMaybe . parser) $ lastLines
@@ -55,9 +64,16 @@ readMoves t number = reverse $ sortOn sortMove $ catMaybes $ fmap (EitherC.right
 --     return r
 
 -- A sort order that ensures that mates are better than any non-mate
+invertEval :: StockfishMove -> StockfishMove
+invertEval (StockfishMove m pv (Right num)) = StockfishMove m pv $ Right (-num)
+invertEval (StockfishMove m pv e) = StockfishMove m pv e
+
 sortMove :: StockfishMove -> Int
-sortMove (StockfishMove _ _ (Left num)) = 1000 - num
-sortMove (StockfishMove _ _ (Right cp)) = cp
+sortMove = evaluationNumber . sfEvaluation
+
+evaluationNumber :: Evaluation -> Int
+evaluationNumber (Left num) = 1000 - num
+evaluationNumber (Right cp) = cp
     
 getMates :: [StockfishMove] -> [MateMove]
 getMates sfm = catMaybes $ fmap toMateMove sfm
@@ -83,7 +99,11 @@ mateParser :: Parser Evaluation
 mateParser = fmap (Left . read) $ string "mate " >> many' digit
 
 centipawnParser :: Parser Evaluation
-centipawnParser = fmap (Right . read) $ string "centipawn " >> many' digit
+centipawnParser = fmap (Right . read) $ do
+  string "cp " 
+  minus <- many' $ char '-'
+  digits <- many' digit
+  return $ minus ++ digits
 
 parseHash :: Parser ()
 parseHash = do
@@ -108,14 +128,14 @@ stockfishLineParser = do
     string " nps "
     many' digit
     space
-    try parseHash
+    many'  parseHash
     string "tbhits "
     many' digit
     string " time "
     many' digit
     string " pv "
     mv <- many' (letter <|> digit)
-    many' (letter <|> digit <|> space)
+    many' (letter <|> digit <|> space <|> char '\r')
     let move = fromJust $ stringToMove $ fmap Ch.toUpper $ mv
     return $ StockfishMove move pvNumber eval
 

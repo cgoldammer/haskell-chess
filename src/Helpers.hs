@@ -9,3 +9,4 @@ index i (_ : xs) = index (i - 1) xs
 makeMaybe :: Bool -> a -> Maybe a
 makeMaybe False _ = Nothing
 makeMaybe True a = Just a
+

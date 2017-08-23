@@ -20,5 +20,5 @@ tests = TestList [
     "Logic tests: " ~: logicTests
   , "String parse tests: " ~: stringParseTests
   , "Pgn game parsing tests:" ~: pgnTests
-  , "Stockfish tests" ~: stockfishTests
+  -- , "Stockfish tests" ~: stockfishTests
   ]
