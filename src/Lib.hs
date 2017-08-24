@@ -5,6 +5,7 @@ module Lib where
 import Data.List
 import qualified Data.Set as S
 import Control.Monad
+import Control.Lens hiding ((.=))
 import qualified Control.Lens as L
 import Data.Maybe
 
@@ -31,11 +32,11 @@ import qualified Turtle as Tu
 fen = fullFen mate1PS
 
 mateFromGameState :: GameState -> IO [MateMove]
-mateFromGameState = mateFinder . fullFen . gsPosition
+mateFromGameState = mateFinder . fullFen . (view gsPosition)
 
 resultsString :: [GameState] -> [[MateMove]] -> String
 resultsString gs mates = U.toString $ encode printable
-    where   goodMateMoves = filter (\(ps, m) -> filterMates m) (zip (fmap gsPosition gs) mates)
+    where   goodMateMoves = filter (\(ps, m) -> filterMates m) (zip (fmap (view gsPosition) gs) mates)
             printable = fmap (\(num, (ps, m)) -> PositionMates num ps m) $ zip [0..] goodMateMoves
 
 runChess :: IO ()

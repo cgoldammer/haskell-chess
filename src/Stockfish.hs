@@ -5,6 +5,7 @@ import Board
 import Logic
 
 import Control.Applicative
+import Control.Lens
 import Data.Aeson
 import Data.Attoparsec.Text
 import Data.Attoparsec.Combinator
@@ -29,7 +30,7 @@ bestMoves fen moveTime number = do
   Tu.cd "/home/cg/haskell-chess/scripts/"
   let arguments = fmap quoteString [fen, show moveTime, show number]
   let gs = fromJust $ fenToGameState fen
-  let color = gsColor gs
+  let color = gs ^. gsColor
   let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
   Tu.shell command empty
   print command

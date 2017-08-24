@@ -23,6 +23,7 @@ import Stockfish
 
 import GHC.Generics
 
+import Control.Lens
 import Control.Applicative
 import qualified Data.ByteString.Lazy.UTF8 as U
 import Data.Aeson
@@ -68,16 +69,16 @@ possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgn
             targetField = pgnToTargetField pgnWithoutPromotion
             movePiece = pgnPiece pgnWithoutPromotion
-            color = gsColor gs
-            movesWithPieceFields = [(mv, PieceField piece color (moveFrom mv)) | (piece, mv) <- allMoves, targetField == Just (moveTo mv) && promotionPiece == movePromotionPiece mv]
-            movesWithPiece = [(pfPiece pf, m) | (m, pf) <- movesWithPieceFields]
+            color = gs ^. gsColor
+            movesWithPieceFields = [(mv, PieceField piece color (mv ^. moveFrom)) | (piece, mv) <- allMoves, targetField == Just (mv ^. moveTo) && promotionPiece == mv ^. movePromotionPiece]
+            movesWithPiece = [(pf ^. pfPiece, m) | (m, pf) <- movesWithPieceFields]
             pgnMoves = createPgnMoves gs movesWithPieceFields
 
 pgnToTargetField pgn = stringToField $ fmap Ch.toUpper $ reverse $ Data.List.take 2 $ reverse pgn
 
 pgnToMove :: GameState -> PgnMove -> Maybe (Piece, Move)
 pgnToMove gs pgn = listToMaybe [mv | (mv, pgnList) <- possibleMoveFields gs (pgnParse pgn color), pgnCleaned `elem` pgnList]
-    where color = gsColor gs
+    where color = gs ^. gsColor
           pgnCleaned = cleanPgn pgn color
 
 pgnPiece :: PgnMove -> Piece
@@ -106,10 +107,10 @@ moveToPgn WithBoth mv pf = moveToPgnHelper True True mv pf
 moveToPgnHelper :: Bool -> Bool -> Move -> PieceField -> PgnMove
 moveToPgnHelper withColumn withRow mv pf = concat $ catMaybes values
   where
-    pieceString = pgnPieceChar $ pfPiece pf
-    columnString = fmap Ch.toLower $ shortColumn $ fieldColumn $ moveFrom mv
-    rowString = shortRow $ fieldRow $ moveFrom mv
-    targetString = fmap Ch.toLower $ shortField $ moveTo mv
+    pieceString = pgnPieceChar $ pf ^. pfPiece
+    columnString = fmap Ch.toLower $ shortColumn $ (mv ^. moveFrom) ^. fieldColumn
+    rowString = shortRow $ mv ^. moveFrom ^. fieldRow
+    targetString = fmap Ch.toLower $ shortField $ mv ^. moveTo
     values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, Just targetString]
 
 pgnPieceChar :: Piece -> String
@@ -330,7 +331,7 @@ ms col mv mvBest eval evalBest = MoveSummary mv mvBest eval evalBest compFull
 formatBest :: [(Move, [StockfishMove], GameState)] -> [(MoveSummary, GameState)]
 formatBest (first : second : rest) = (mvs, gs) : (formatBest (second:rest))
   where mvs = ms col mv mvBest (sfEvaluation (sf !! 0)) (sfEvaluation (sfAfter !! 0))
-        col = gsColor gs
+        col = gs ^. gsColor
         mvBest = sfMove $ sf !! 0
         (mv, sf, gs) = first
         (_, sfAfter, _) = second

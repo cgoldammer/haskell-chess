@@ -1,10 +1,12 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
 module Board (stringToPosition
             , Piece (..)
-            , Field (Field, fieldColumn, fieldRow)
+            , Field (Field), fieldColumn, fieldRow
             , Position
             , Color (White, Black)
-            , PieceField (PieceField, pfField, pfColor, pfPiece)
+            , PieceField (PieceField)
+            , Move (Move), moveFrom, moveTo, movePromotionPiece
+            , pfField, pfColor, pfPiece
             , fieldToInt
             , rowInt, columnInt
             , intRow
@@ -19,7 +21,6 @@ module Board (stringToPosition
             , shortPiece, shortColumn, shortRow, shortField, shortMove
             , Column (A, B, C, D, E, F, G, H)
             , Row (R1, R2, R3, R4, R5, R6, R7, R8)
-            , Move (Move, moveFrom, moveTo, movePromotionPiece)
             , MoveLocation
             , fieldColor
             , allPieces, allFullPieces, allNonKingPieces, allNonKingFullPieces, allNonPawnPieces
@@ -30,6 +31,7 @@ import Data.Maybe
 import Data.List
 import Control.Monad
 import Text.Read
+import Control.Lens
 
 data Piece = King | Queen | Rook | Bishop | Knight | Pawn deriving (Enum, Eq, Ord)
 data Column = A | B | C | D | E | F | G | H deriving (Enum, Ord, Eq)
@@ -46,10 +48,18 @@ allNonPawnPieces = [King .. Knight]
 
 data Color = White | Black deriving (Enum, Ord, Eq)
 
-data Field = Field { fieldColumn :: Column, fieldRow :: Row } deriving (Eq, Ord)
-data Move = Move {moveFrom :: Field, moveTo :: Field, movePromotionPiece :: Maybe Piece} deriving (Eq, Ord)
+data Field = Field { _fieldColumn :: Column, _fieldRow :: Row } deriving (Eq, Ord)
+makeLenses ''Field
+
+
+data Move = Move {_moveFrom :: Field, _moveTo :: Field, _movePromotionPiece :: Maybe Piece} deriving (Eq, Ord)
+makeLenses ''Move
+
 type MoveLocation = (Field, Field)
-data PieceField = PieceField {pfPiece :: Piece, pfColor :: Color, pfField :: Field} deriving (Eq)
+
+data PieceField = PieceField {_pfPiece :: Piece, _pfColor :: Color, _pfField :: Field} deriving (Eq)
+makeLenses ''PieceField
+
 type Position = [PieceField]
 
 instance Show Move where
@@ -111,10 +121,10 @@ instance Show PieceField where
     show (PieceField p c f) = show c ++ show p ++ show f
 
 charColumn :: Char -> Maybe Column
-charColumn c = join $ fmap (flip index allColumns) (elemIndex c ['A'..'H'])
+charColumn c = join $ fmap (flip safeIndex allColumns) (elemIndex c ['A'..'H'])
 
 charRow :: Char -> Maybe Row
-charRow r = join $ fmap (flip index allRows) (elemIndex r ['1'..'8'])
+charRow r = join $ fmap (flip safeIndex allRows) (elemIndex r ['1'..'8'])
 
 stringToPiece :: String -> Maybe Piece
 stringToPiece "K" = Just King
@@ -177,9 +187,9 @@ rowInt :: Row -> Int
 rowInt r = (fromJust (elemIndex r allRows)) + 1
 
 intRow :: Int -> Maybe Row
-intRow i = index (i - 1) allRows
+intRow i = safeIndex (i - 1) allRows
 
 intColumn :: Int -> Maybe Column
-intColumn i = index (i - 1) allColumns
+intColumn i = safeIndex (i - 1) allColumns
 
 

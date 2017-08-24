@@ -3,6 +3,7 @@
 module Algorithms (randomGood, randomPositions) where
 
 import Board
+import Control.Lens
 import Logic
 import System.Random
 import qualified Data.List.Unique as Un
@@ -19,7 +20,7 @@ legalPosition :: GameState -> Bool
 legalPosition gs = bothSidesOneKing && noDuplicatedFields && not (isChecking gs)
     where   numberKings = fmap (length . piecePositions King gs) [White, Black]
             bothSidesOneKing = (maximum numberKings == 1) && (minimum numberKings == 1)
-            noDuplicatedFields = (length . Un.repeated . fmap pfField . gsPosition) gs == 0
+            noDuplicatedFields = 0 == (length . Un.repeated) (fmap (view pfField) (gs ^. gsPosition))
 
 sensiblePosition :: GameState -> Bool
 sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not sameColorBishops
