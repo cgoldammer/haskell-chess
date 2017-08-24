@@ -3,7 +3,7 @@
 
 
 module Logic (allPhysicalMoves, allPiecePhysicalMoves
-            , GameState (GameState), gsPosition, gsColor -- , _gsPosition, _gsColor)
+            , GameState (GameState), gsPosition, gsColor
             , CastlingRights, castlingFree
             , defaultGameState, defaultGameStateNoCastle
             , getPositions

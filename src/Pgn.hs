@@ -23,7 +23,7 @@ import Stockfish
 
 import GHC.Generics
 
-import Control.Lens
+import Control.Lens hiding ((.=))
 import Control.Applicative
 import qualified Data.ByteString.Lazy.UTF8 as U
 import Data.Aeson

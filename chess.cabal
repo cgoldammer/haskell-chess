@@ -62,6 +62,7 @@ test-suite chess-test
   other-modules:     LogicTest, PgnTest, StringParseTest
   build-depends:       base
                      , chess
+                     , lens
                      , HUnit
                      , containers
                      , attoparsec

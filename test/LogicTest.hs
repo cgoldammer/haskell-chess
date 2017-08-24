@@ -1,5 +1,6 @@
 module LogicTest (logicTests) where
 
+import Control.Lens hiding ((.=))
 import Test.HUnit
 import Algorithms
 import Board
@@ -91,7 +92,7 @@ checkTests = fmap (conditionHolds inCheck "Should be in check, but isn't") (mate
 isCheckTests = fmap (conditionHolds (not . isChecking) "Should not be checking, but is") (mates ++ nonMates)
 
 oppMoves :: [Field]
-oppMoves = fmap (moveTo . snd) $ allOpponentMoves $ mates !! 0
+oppMoves = fmap ((view moveTo) . snd) $ allOpponentMoves $ mates !! 0
 oppMoveTest = TestCase $ assertBool (show oppMoves) ((fromJust (stringToField "A1")) `elem` oppMoves)
 
 pawnPosition = ["WKA1", "WPE4", "WPD2", "WPC2", "BKA8", "BPD4", "BPD5"]
@@ -114,12 +115,12 @@ allPawnMoves = pawnToMoves promoteGS
 pawnTestPromote = testPossible "promotion" expectedPawnMoves [] allPawnMoves
 
 pawnToFields :: GameState -> [Field]
-pawnToFields gs = fmap moveTo $ pawnToMoves gs
+pawnToFields gs = fmap (view moveTo) $ pawnToMoves gs
 
 pawnToMoves :: GameState -> [Move]
 pawnToMoves gs = allPawnToFields
     where   allPawnFields = getPositions gs Pawn
-            allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (moveFrom mv) `elem` allPawnFields]
+            allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (mv ^. moveFrom) `elem` allPawnFields]
 pawnTests = TestList [
     "white" ~: pawnTestWhite
   , "black" ~: pawnTestBlack
@@ -150,7 +151,7 @@ testCastleBothBlack = TestCase $ assertEqual error (S.fromList movesExpected) in
 -- after white castles kingside (queenside), the rook is on f1 (c1)
 testRookField mv expectedField = TestCase $ assertEqual error (S.fromList expectedFields) intersection
     where error = "Rook expected on: "
-          fields = fmap pfField $ gsPosition gsAfterCastle
+          fields = fmap (view pfField) $ gsAfterCastle ^. gsPosition
           expectedFields = [fromJust (stringToField expectedField)]
           intersection = intersect fields expectedFields
           gsAfterCastle = move gsCastleBoth (King, fromJust (stringToMove mv))
@@ -168,7 +169,7 @@ testCastleSide cr mv = TestCase $ assertEqual error (S.fromList movesExpected) i
           gsCastleOne = gsWithCastling posCastleBoth White cr
           possible = fmap snd $ allNextLegalMoves gsCastleOne
           intersection = intersect possible movesExpected
-          kingFields = fmap (moveTo . snd) $ filter (\m -> fst m == King) $ allNextLegalMoves gsCastleOne
+          kingFields = fmap ((view moveTo) . snd) $ filter (\m -> fst m == King) $ allNextLegalMoves gsCastleOne
 
 crKing = ((True, False), (False, False))
 crQueen = ((False, True), (False, False))
@@ -217,7 +218,7 @@ testsEp = [
   , testEp ["E2E4", "A8B8", "A1B1"] ["D4D3"] "Cannot take the c-pawn after intermediate moves"]
 
 ownPieces :: GameState -> Piece -> [Field]
-ownPieces gs p = fmap pfField $ filter (\pf -> pfPiece pf == p) $ ownPieceFields gs
+ownPieces gs p = fmap (view pfField) $ filter ((==p) . (view pfPiece)) $ ownPieceFields gs
 
 fieldsFromString s = fmap (fromJust . stringToField) s
 

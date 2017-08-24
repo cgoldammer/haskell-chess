@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 module PgnTest (pgnTests) where
 
+import Control.Lens
 import Test.HUnit
 import Algorithms
 import Board
@@ -24,7 +25,7 @@ import qualified Turtle as Tu
 moveString = ["e4", "e5", "Ne2", "Nc6", "N2c3"]
 expected = ["E2E4", "E7E5", "G1E2", "B8C6", "E2C3"]
 
-pos = gsPosition . fromJust . fenToGameState $ startGameFen
+pos = (view gsPosition) . fromJust . fenToGameState $ startGameFen
 startingPositionParseTest = 32 ~=? length pos
 
 fullMoves = [
@@ -35,7 +36,7 @@ pgnEqualMoveTest :: String -> Piece -> String -> Test
 pgnEqualMoveTest moveString piece pgnString = pgnString ~=? pgnMoveParse
     where   pgnMoveParse = moveToPgn Standard mv pf
             mv = fromJust $ stringToMove moveString
-            from = moveFrom mv
+            from = mv ^. moveFrom
             pf = PieceField piece White from
 
 pgnEqualMoveTests = fmap (\(moveString, piece, pgnString) -> pgnEqualMoveTest moveString piece pgnString) fullMoves
