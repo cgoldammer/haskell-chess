@@ -5,7 +5,6 @@ import Test.HUnit
 import Algorithms
 import Board
 import Logic
-import Various
 import qualified Data.Set as S
 import qualified Data.Text as Te
 import Data.Maybe
@@ -118,9 +117,8 @@ pawnToFields :: GameState -> [Field]
 pawnToFields gs = fmap (view moveTo) $ pawnToMoves gs
 
 pawnToMoves :: GameState -> [Move]
-pawnToMoves gs = allPawnToFields
-    where   allPawnFields = getPositions gs Pawn
-            allPawnToFields = [mv | (_, mv) <- allNextLegalMoves gs, (mv ^. moveFrom) `elem` allPawnFields]
+pawnToMoves gs = [mv | (_, mv) <- allNextLegalMoves gs, (mv ^. moveFrom) `elem` (getPositions gs Pawn)]
+
 pawnTests = TestList [
     "white" ~: pawnTestWhite
   , "black" ~: pawnTestBlack
@@ -292,18 +290,8 @@ fenDoubleConvertTests = TestList $ fmap fenDoubleConvertTest fensToConvert
 legalMoveTests = ["Test legal moves are right" ~: legalMoveTest f s | (f, s, _) <- legalMoveData]
 illegalMoveTests = ["Test illegal moves are right" ~: illegalMoveTest f t | (f, _, t) <- legalMoveData]
 
-reachableTests = [
-    "Rook A1 A2" ~: reachableByRook (Field A R1) (Field A R2) ~?= True
-  , "Rook A1 C1" ~: reachableByRook (Field A R1) (Field C R1) ~?= True
-  , "Rook A1 C3" ~: reachableByRook (Field A R1) (Field C R3) ~?= False
-  , "Bishop A1 A2" ~: reachableByBishop (Field A R1) (Field A R2) ~?= False
-  , "Bishop A1 H8" ~: reachableByBishop (Field A R1) (Field H R8) ~?= True
-  , "Bishop H1 A8" ~: reachableByBishop (Field H R1) (Field A R8) ~?= True
-  ]
-
 singleTests = [
       "Opponent Move test" ~: oppMoveTest
-    , "Reachable tests" ~: reachableTests
     , "Pawn that is taken en passant disappears" ~: testEpDisappears
     , "Castling Queen" ~: testCastleQueen
     , "Castling Both black" ~: testCastleBothBlack

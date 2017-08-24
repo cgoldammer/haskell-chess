@@ -1,4 +1,4 @@
-module Helpers (safeIndex, makeMaybe) where
+module Helpers (safeIndex, safeHead, makeMaybe) where
 
 -- A safe version of (!!) that returns Nothing if the position doesn't exist
 safeIndex :: Int -> [a] -> Maybe a

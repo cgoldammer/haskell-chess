@@ -5,7 +5,6 @@ import Test.HUnit
 import Algorithms
 import Board
 import Logic
-import Various 
 import Stockfish 
 import qualified Data.Set as S
 import Data.Attoparsec.Text hiding (take, D, takeWhile)

@@ -38,11 +38,6 @@ import Data.Either
 import Data.Either.Combinators as EitherC
 import qualified Turtle as Tu
 
-import Board
-import Logic
-import Various
-import Debug.Trace
-
 type PgnMove = String
 
 pgnParse :: PgnMove -> Color -> PgnMove

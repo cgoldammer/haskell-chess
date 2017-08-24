@@ -15,7 +15,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Helpers, Board, Logic, Algorithms, Various, Stockfish, Pgn, Lib
+  exposed-modules:     Helpers, Board, Logic, Algorithms, Stockfish, Pgn, Lib
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , lens

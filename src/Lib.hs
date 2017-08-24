@@ -22,14 +22,12 @@ import Algorithms
 import Stockfish
 import Board
 import Logic
-import Various
 import Control.Applicative
 
 import Data.Aeson
 import qualified Turtle as Tu
 
-
-fen = fullFen mate1PS
+-- fen = fullFen mate1PS
 
 mateFromGameState :: GameState -> IO [MateMove]
 mateFromGameState = mateFinder . fullFen . (view gsPosition)
