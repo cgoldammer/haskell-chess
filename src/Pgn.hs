@@ -7,14 +7,17 @@ module Pgn (
   , possibleMoveFields
   , pgnPiece
   , pgnToTargetField, pgnToPromotion
-  , PgnTag (..)
+  , PgnTag (..), Player (..)
   , tagParse
   , eventParse, siteParse, fullTagParse, parseAllTags
-  , parseGameMoves, moveParser, bothMoveParser, parseWholeGame, parseWholeGames
+  , parseGameMoves, moveParser, bothMoveParser, parseWholeGame, parseWholeGames, sidelineParser
+  , parseFromFile
   , pgnGame
   , startingGS
   , getGames
   , moveToPgn) where
+
+import Debug.Trace
 
 import Board
 import Logic
@@ -37,6 +40,7 @@ import qualified Data.Text as Te
 import Data.Either
 import Data.Either.Combinators as EitherC
 import qualified Turtle as Tu
+import qualified Filesystem.Path.CurrentOS as FS
 
 type PgnMove = String
 
@@ -130,10 +134,21 @@ mv' = fromJust $ pgnToMove gs' "bxc3"
 
 -- pf = PieceField Pawn White (fromJust (stringToField "E4"))
 
-eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ many' $ letter <|> space <|> digit
+eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ many' $ letter <|> space <|> digit <|> char '?'
 siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
 dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ letter <|> space
 roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
+whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
+blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
+
+nameParser :: Parser Player
+nameParser = do
+  last <- many' letter
+  many' (space <|> char ',')
+  first <- many' letter
+  return $ Player first last
+
+nameParse = letter <|> char ',' <|> space
 
 tagParse :: String -> Parser a -> Parser a
 tagParse tagName p = do
@@ -145,7 +160,7 @@ tagParse tagName p = do
 
 fullTagParse :: Parser PgnTag
 fullTagParse = do
-  result <- eventParse <|> siteParse <|> dateParse <|> roundParse <|> otherParse
+  result <- eventParse <|> siteParse <|> dateParse <|> roundParse <|> whitePlayerParse <|> blackPlayerParse <|> otherParse
   return result
 
 parseAllTags :: Parser [PgnTag]
@@ -205,9 +220,11 @@ pgnGame pgnMoves = liftA2 Game startingGS $ sequence moves
 data Game = Game { startingGameState :: GameState, gameMoves :: [Move] } deriving Show
 data PgnGame = PgnGame { pgnGameTags :: [PgnTag], parsedPgnGame :: Game } deriving Show
 
+moveBegin :: Parser ()
 moveBegin = do
   many1' digit
-  char '.'
+  many' $ char '.'
+  return ()
 
 bothMoveParser :: Parser [String]
 bothMoveParser = do
@@ -228,11 +245,60 @@ whiteMoveParser = do
   many' endOfLine
   return [moveWhite]
 
+commentParser :: Parser ()
+commentParser = do
+  many' space
+  char '{'
+  skipWhile (/='}')
+  char '}'
+  return ()
+    
+dollarParser :: Parser ()
+dollarParser = do
+  many' space
+  char '$'
+  many' digit
+  return ()
+
+-- ignoreInteriorSidelines :: Parser ()
+-- ignoreInteriorSidelines = do
+--   skipWhile $ \c -> not (c `elem` ("(" :: String))
+--   many' sidelineParser
+--   return ()
+--
+
+sidelineParser :: Parser ()
+sidelineParser = do
+  many' space
+  char '('
+  -- takeTill (\c `elem` "()")
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  many' sidelineParser
+  takeTill (\c -> c `elem` ("()"::String))
+  char ')'
+  return ()
+
 singleMoveParser :: Parser String
 singleMoveParser = do
   many' space
   first <- satisfy $ inClass "abcdefghKNBQRO"
   rest <- many1' (letter <|> digit <|> char '#' <|> char 'x' <|> char '+' <|> char '=' <|> char 'O' <|> char '-')
+  many' dollarParser
+  many' $ sidelineParser <|> commentParser
   return $ first : rest
 
 moveParser = bothMoveParser <|> whiteMoveParser
@@ -242,6 +308,8 @@ filterMoves c = not $ c `elem` ("x#+=" :: String)
 
 parseGameMoves :: Parser [String]
 parseGameMoves = do
+  many' $ sidelineParser <|> commentParser
+  many' space
   moves <- many1' moveParser
   return $ concat $ (fmap . fmap) (filter filterMoves) moves
 
@@ -250,7 +318,7 @@ parseWholeGame = do
   tags <- parseAllTags
   many' endOfLine
   moves <- parseGameMoves
-  many' endOfLine
+  -- trace ("Move:" ++ show moves) (many' endOfLine)
   many' (space <|> digit <|> char '-' <|> char '/')
   many' endOfLine
   return $ uncurry (liftA2 PgnGame) (Just tags, pgnGame moves)
@@ -258,40 +326,44 @@ parseWholeGame = do
 parseWholeGames :: Parser [Maybe PgnGame]
 parseWholeGames = many1' parseWholeGame
 
-getGames :: Int -> IO [PgnGame]
-getGames num = do
-  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input "/home/cg/haskell-chess/test/files/many.pgn"
+gameText :: String -> Int -> IO Te.Text
+gameText fp num = do
+  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input $ FS.fromText (Te.pack "/home/cg/haskell-chess/test/files/game3.pgn")
   let needle = "[Event "
   let gamePgn = Te.intercalate needle $ Data.List.take (num + 1) $ Te.splitOn needle gamePgnRaw
+  return gamePgn
+
+getGames :: String -> Int -> IO [PgnGame]
+getGames fp num = do
+  gamePgn <- gameText fp num
   let eitherGame = parseOnly parseWholeGames gamePgn
+  print gamePgn
   let games = catMaybes $ fromJust $ EitherC.rightToMaybe eitherGame
+  print games
   return games
 
--- data Game = Game { startingGameState :: GameState, gameMoves :: [Move] } deriving Show
---
---
-bestGames :: Int -> IO [[(Move, [StockfishMove], GameState)]]
-bestGames num = do
-  games <- getGames num
-  mv <- mapM gameBest $ fmap parsedPgnGame $ games
-  return mv
+-- bestGames :: String -> Int -> IO [[(Move, [StockfishMove], GameState)]]
+-- bestGames fp num = do
+--   games <- getGames fp num
+--   mv <- mapM gameBest $ fmap parsedPgnGame $ games
+--   return mv
 
-gameBest :: Game -> IO [(Move, [StockfishMove], GameState)]
-gameBest game = do
-  let moves = gameMoves game
-  let start = startingGameState game
-  let gameStates = scanl move' start moves
-  b <- best $ zip gameStates moves
-  return b
+-- gameBest :: Game -> IO [(Move, [StockfishMove], GameState)]
+-- gameBest game = do
+--   let moves = gameMoves game
+--   let start = startingGameState game
+--   let gameStates = Data.List.take 5 $ scanl move' start moves
+--   b <- best $ zip gameStates moves
+--   return b
 
 
-pos :: IO [(GameState, Move)]
-pos = do
-  g <- getGames 1
+pos :: String -> IO [(GameState, Move)]
+pos fp = do
+  g <- getGames fp 5
   let game = parsedPgnGame $ g !! 0
   let moves = gameMoves game
   let start = startingGameState game
-  let gameStates = scanl move' start moves
+  let gameStates = Data.List.take 30 $ scanl move' start moves
   return $ zip gameStates moves
 
 
@@ -301,18 +373,75 @@ interestingRange num = (start, end)
         start = min 30 middle
         end = min (start + 20) num
 
-
 slice from to xs = Data.List.take (to - from + 1) (Data.List.drop from xs)
 
-best :: [(GameState, Move)] -> IO [(Move, [StockfishMove], GameState)]
+parseFromFile :: FilePath -> Int -> IO [String]
+parseFromFile fp num = do
+  g <- getGames fp num
+  csvs <- mapM gameCSV g
+  return csvs
+
+gameCSV :: PgnGame -> IO String
+gameCSV gm = do 
+  let gt = pgnGameTags gm
+  let g = parsedPgnGame gm
+  let moves = gameMoves g
+  let start = startingGameState g
+  let gameStates = scanl move' start moves
+  mv <- best $ zip gameStates moves
+  return $ gameSummary gt mv
+
+best :: [(GameState, Move)] -> IO [(Move, Maybe StockfishMove, GameState)]
 best positionsRaw = do
   let numberMoves = length positionsRaw
-  let (start, end) = interestingRange numberMoves
+  -- let (start, end) = interestingRange numberMoves
+  let (start, end) = (0, numberMoves)
   let positions = slice start end positionsRaw
   let mvs = fmap snd positions
   let states = fmap fst positions
-  bests <- mapM (\gs -> bestMoves (gameStateToFen gs) 100 1) states
+  bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) 100 1) states
   return $ zip3 mvs bests states
+
+gameSummary :: [PgnTag] -> [(Move, Maybe StockfishMove, GameState)] -> String
+gameSummary gt summ = tagSummaries ++ "," ++ evalSummaries
+  where evals = gameEvaluations summ
+        (whiteEval, blackEval) = evalSummary evals
+        tagSummaries = Data.List.intercalate "," $ catMaybes $ fmap tagSummary gt
+        evalSummaries = show (evalAverage whiteEval) ++ "," ++ show (evalAverage blackEval)
+
+tagSummary :: PgnTag -> Maybe String
+tagSummary (PgnWhite player) = Just $ lastName player
+tagSummary (PgnBlack player) = Just $ lastName player
+tagSummary _ = Nothing
+
+data PlayerEval = PlayerEval { evalAverage :: Int } deriving Show
+
+type GameEval = (PlayerEval, PlayerEval)
+
+evalSummary :: [(Color, Int)] -> GameEval
+evalSummary evals = (evalWhite, evalBlack)
+  where evalWhite = toPlayerEval $ fmap snd $ (filter (\e -> fst e == White)) evals
+        evalBlack = toPlayerEval $ fmap snd $ (filter (\e -> fst e == Black)) evals
+
+average xs = realToFrac (sum xs) / genericLength xs
+
+toPlayerEval :: [Int] -> PlayerEval
+toPlayerEval evals = PlayerEval $ round $ average evals
+
+gameEvaluations :: [(Move, Maybe StockfishMove, GameState)] -> [(Color, Int)]
+gameEvaluations summ = results
+  where formatted = formatBest summWithSF
+        summWithSF = [(m, fromJust sfm, gs) | (m, sfm, gs) <- summ, isJust sfm]
+        results = [(gs ^. gsColor, msComparison ms) | (ms, gs) <- formatted]
+        
+-- formatBest (first : second : rest) = (mvs, gs) : (formatBest (second:rest))
+--   where mvs = ms col mv mvBest (sfEvaluation (sf !! 0)) (sfEvaluation (sfAfter !! 0))
+--         col = gs ^. gsColor
+--         mvBest = sfMove $ sf !! 0
+--         (mv, sf, gs) = first
+--         (_, sfAfter, _) = second
+-- formatBest _ = []
+
 
 data MoveSummary = MoveSummary {msMove :: Move, msMoveBest :: Move, evalMove :: Evaluation, evalBest :: Evaluation, msComparison :: Int} deriving Show
 
@@ -323,25 +452,25 @@ ms col mv mvBest eval evalBest = MoveSummary mv mvBest eval evalBest compFull
         compFull = if playedBest then 0 else min 0 comparison
         playedBest = mv == mvBest
 
-formatBest :: [(Move, [StockfishMove], GameState)] -> [(MoveSummary, GameState)]
+formatBest :: [(Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]
 formatBest (first : second : rest) = (mvs, gs) : (formatBest (second:rest))
-  where mvs = ms col mv mvBest (sfEvaluation (sf !! 0)) (sfEvaluation (sfAfter !! 0))
+  where mvs = ms col mv mvBest (sfEvaluation sf) (sfEvaluation sfAfter)
         col = gs ^. gsColor
-        mvBest = sfMove $ sf !! 0
+        mvBest = sfMove sf
         (mv, sf, gs) = first
         (_, sfAfter, _) = second
 formatBest _ = []
 
-data BestMoveTest = BestMoveTest { moveTestFen :: String, moveTestMove :: String, moveTestBest :: String, moveTestComparison :: Int} deriving (Show, Generic)
+-- data BestMoveTest = BestMoveTest { moveTestFen :: String, moveTestMove :: String, moveTestBest :: String, moveTestComparison :: Int} deriving (Show, Generic)
 
-instance ToJSON BestMoveTest
+-- instance ToJSON BestMoveTest
 
-printBest :: (MoveSummary, GameState) -> BestMoveTest
-printBest (mv, gs) = BestMoveTest gsFen mvString mvBestString comp
-  where gsFen = gameStateToFen gs
-        mvString = shortMove (msMove mv)
-        mvBestString = shortMove (msMoveBest mv)
-        comp = msComparison mv
+-- printBest :: (MoveSummary, GameState) -> BestMoveTest
+-- printBest (mv, gs) = BestMoveTest gsFen mvString mvBestString comp
+--   where gsFen = gameStateToFen gs
+--         mvString = shortMove (msMove mv)
+--         mvBestString = shortMove (msMoveBest mv)
+--         comp = msComparison mv
         
 -- writeFile "/home/cg/data/output/tests.json" $ U.toString $ encode $ filter (\mt -> (moveTestComparison mt) < -150) $ concat $ (fmap . fmap) printBest $ fmap formatBest b
         

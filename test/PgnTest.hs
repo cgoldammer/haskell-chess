@@ -55,8 +55,11 @@ testCastlingParser = ((True, True), (True, True)) ~=? castlingRightsParser "KQkq
 
 tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
+    , ("[Event \"?\"]\n", PgnEvent "?")
     , ("[Site \"SomeSite\"]\n", PgnSite "SomeSite")
     , ("[Other \"AB\"]\n", PgnOther "Other" "AB")
+    , ("[White \"Bo, Anna\"]\n", PgnWhite (Player "Anna" "Bo"))
+    , ("[White \"Bo\"]\n", PgnWhite (Player "" "Bo"))
     ]
 
 firstTags = Data.List.concat $ fmap fst tags
@@ -131,6 +134,17 @@ testMovesGood s = isJust game ~? error
           error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
 
 
+fullParse = [
+    ("1. e4 e5 (1... e6 $22 $18 {[%emt 1:40:00] comment} 2. f4 (2. c4 $13)) 2. d4 {comment with , and # and $ and ()} c5 *", 4)
+  , ("1.e4 (1.Nf4 (..Nf6) ((1.d4) (1.Nf4))) 1... e5 2.Nf3 Nf6", 4)
+  , ("1. Ng6 (1. Bg3 Qb6 () ) 1... Qb6 2. Bxc6+", 3)]
+
+testFullParse :: (String, Int) -> Test
+testFullParse (s, num) = correct ~? error
+    where parsedPgnMoves = EitherC.rightToMaybe $ parseOnly parseGameMoves $ Te.pack s -- Maybe [Move]
+          error = "Read into moves failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
+          correct = length (fromJust parsedPgnMoves) == num
+
 firstMove = fromJust $ stringToMove "E2E4"
 secondMove = fromJust $ stringToMove "E7E5"
 
@@ -200,6 +214,7 @@ externalFileTests = [
 moveListTests = [
     "Moves that should parse: " ~: fmap testMovesGood movesGood
   , "Moves that should not parse: " ~: fmap testMovesNonParse movesNotParse
+  , "Moves that should fully parse: " ~: fmap testFullParse fullParse
   ]
 
 pgnParseTests = pgnEqualMoveTests ++ pgnSameGameAsMoveTests

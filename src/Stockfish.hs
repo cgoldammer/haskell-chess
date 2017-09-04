@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
-module Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
+module Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, singleBestMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
 
 import Board
 import Logic
+import Helpers
 
 import Control.Applicative
 import Control.Lens
@@ -33,10 +34,13 @@ bestMoves fen moveTime number = do
   let color = gs ^. gsColor
   let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
   Tu.shell command empty
-  print command
+  print $ command
   moves <- readResults number
   let movesStandardized = if color == White then moves else fmap invertEval moves
   return movesStandardized
+
+singleBestMove :: Fen -> Int -> Int -> IO (Maybe StockfishMove)
+singleBestMove fen moveTime number = fmap safeHead $ bestMoves fen moveTime number
 
 
 resultLines :: Int -> IO [Te.Text]

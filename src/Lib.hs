@@ -8,6 +8,8 @@ import Control.Monad
 import Control.Lens hiding ((.=))
 import qualified Control.Lens as L
 import Data.Maybe
+import Options.Applicative
+import Data.Semigroup ((<>))
 
 import Text.Read
 import qualified Data.Text as Te
@@ -23,6 +25,7 @@ import Stockfish
 import Board
 import Logic
 import Control.Applicative
+import Pgn
 
 import Data.Aeson
 import qualified Turtle as Tu
@@ -36,16 +39,6 @@ resultsString :: [GameState] -> [[MateMove]] -> String
 resultsString gs mates = U.toString $ encode printable
     where   goodMateMoves = filter (\(ps, m) -> filterMates m) (zip (fmap (view gsPosition) gs) mates)
             printable = fmap (\(num, (ps, m)) -> PositionMates num ps m) $ zip [0..] goodMateMoves
-
-runChess :: IO ()
-runChess = do
-    randomStates :: [GameState] <- randomGood 5000
-    print $ length randomStates
-    mates :: [[MateMove]] <- traverse mateFromGameState randomStates 
-    let printable = resultsString randomStates mates
-    print printable
-    writeFile "/home/cg/data/output/mates.json" printable
-    return ()
 
 data PositionMates = PositionMates Int Position [MateMove]
 
@@ -64,5 +57,72 @@ filterMates mm = length mm > 0 && numberMin == 1 && minNumber >= 1 && minNumber 
     where   minNumber = minimum numbers
             numbers = fmap snd mm
             numberMin = length $ filter (minNumber==) numbers
+
+
+data ParseInput = ParseInput { 
+    fileName :: FilePath
+  , startMove :: Int
+  , endMove :: Int
+  , gameStart :: Int
+  , gameEnd :: Int }
+
+data Input = FileInput FilePath | StdInput
+
+fileInput :: Parser FilePath
+fileInput = strOption
+  ( long "file"
+  <> short 'f'
+  <> metavar "FILENAME"
+  <> help "Input file")
+
+stdInput :: Parser Input
+stdInput = flag' StdInput
+  (  long "stdin"
+  <> help "Read from stdin")
+
+-- input :: Parser Input
+-- input = fileInput <|> stdInput
+
+runChess :: IO ()
+runChess = greet =<< execParser opts
+  where
+    opts = info (parse <**> helper)
+      ( fullDesc
+      <> progDesc "Print a greeting"
+      <> header "A header")
+
+greet :: ParseInput -> IO ()
+greet (ParseInput fn sm em gs ge) = do
+  strings <- parseFromFile (show fn) ge
+  mapM_ putStrLn strings
+  return ()
+      
+parse :: Parser ParseInput
+parse = ParseInput
+  <$> fileInput 
+  <*> option auto
+    ( long "startMove"
+      <> help "Starting move for evaluation"
+      <> showDefault
+      <> value 1
+      <> metavar "INT")
+  <*> option auto
+    ( long "endMove"
+      <> help "Env move for evaluation"
+      <> showDefault
+      <> value 2
+      <> metavar "INT")
+  <*> option auto
+    ( long "gameStart"
+      <> help "Starting game for evaluation"
+      <> showDefault
+      <> value 1
+      <> metavar "INT")
+  <*> option auto
+    ( long "gameEnd"
+      <> help "Ending game for evaluation"
+      <> showDefault
+      <> value 1
+      <> metavar "INT")
 
 
