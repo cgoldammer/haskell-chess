@@ -319,7 +319,7 @@ parseWholeGame = do
   many' endOfLine
   moves <- parseGameMoves
   -- trace ("Move:" ++ show moves) (many' endOfLine)
-  many' (space <|> digit <|> char '-' <|> char '/')
+  many' (space <|> digit <|> char '-' <|> char '/' <|> char '*')
   many' endOfLine
   return $ uncurry (liftA2 PgnGame) (Just tags, pgnGame moves)
 
@@ -328,7 +328,7 @@ parseWholeGames = many1' parseWholeGame
 
 gameText :: String -> Int -> IO Te.Text
 gameText fp num = do
-  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input $ FS.fromText (Te.pack "/home/cg/haskell-chess/test/files/game3.pgn")
+  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input $ FS.fromText (Te.pack "/home/cg/haskell-chess/test/files/cup.pgn")
   let needle = "[Event "
   let gamePgn = Te.intercalate needle $ Data.List.take (num + 1) $ Te.splitOn needle gamePgnRaw
   return gamePgn
@@ -394,7 +394,7 @@ gameCSV gm = do
 best :: [(GameState, Move)] -> IO [(Move, Maybe StockfishMove, GameState)]
 best positionsRaw = do
   let numberMoves = length positionsRaw
-  -- let (start, end) = interestingRange numberMoves
+  let (start, end) = interestingRange numberMoves
   let (start, end) = (0, numberMoves)
   let positions = slice start end positionsRaw
   let mvs = fmap snd positions
