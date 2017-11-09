@@ -3,14 +3,10 @@ module PgnTest (pgnTests) where
 
 import Control.Lens
 import Test.HUnit
-import Algorithms
-import Board
-import Logic
 import qualified Data.Set as S
 import Data.Attoparsec.Text hiding (take, D, takeWhile)
 import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.ByteString.Char8 as C
-import Pgn
 import qualified Data.Text as Te
 import Control.Monad
 import Data.Maybe
@@ -20,7 +16,13 @@ import Data.List
 import Control.Applicative
 import qualified Turtle as Tu
 
+import Chess.Algorithms
+import Chess.Board
+import Chess.Logic
+import Chess.Pgn
+
 -- I can parse a string, from a starting position
+
 moveString = ["e4", "e5", "Ne2", "Nc6", "N2c3"]
 expected = ["E2E4", "E7E5", "G1E2", "B8C6", "E2C3"]
 
@@ -128,9 +130,11 @@ testMovesNonParse s = Nothing ~=? parsed
           error = "Shouldn't parse single but did: " ++ s ++ " | Parsed" ++ (show parsedEither)
 
 testMovesGood :: String -> Test
-testMovesGood s = isJust game ~? error
-    where parsedPgnMoves = EitherC.rightToMaybe $ parseOnly parseGameMoves $ Te.pack s -- Maybe [Move]
-          game = join $ fmap pgnGame parsedPgnMoves -- Maybe Game
+testMovesGood s = isRight game ~? error
+    where parsedPgnMoves = parseOnly parseGameMoves $ Te.pack s -- Either String [Move]
+          toEitherGame (Left s) = Left s
+          toEitherGame (Right m) = Right $ pgnGame m
+          game = toEitherGame parsedPgnMoves
           error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
 
 
@@ -177,19 +181,17 @@ testExternalPgn = TestCase $ do
     let eitherMoves = parseOnly parseGameMoves gamePart
     isRight eitherMoves @? "Moves are not read: " ++ show gamePart ++ show eitherMoves
     let eitherGameFromMoves = pgnGame $ fromJust $ EitherC.rightToMaybe eitherMoves
-    isJust eitherGameFromMoves @? "Moves are not a game: " ++ show eitherGameFromMoves
-    let eitherGame = parseOnly parseWholeGame gamePgn
+    isRight eitherGameFromMoves @? "Moves are not a game: " ++ show eitherGameFromMoves
+    let eitherGame = readSingleGame gamePgn
     isRight eitherGame @? "Game is not read: " ++ show eitherGame
 
 testExternalPgns = TestCase $ do
-  gamePgnRaw :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
+  let file = "test/files/many.pgn"
   let number = 1
-  let needle = "[Event"
-  let gamePgn = Te.intercalate needle $ take (number + 1) $ Te.splitOn needle gamePgnRaw
-  let eitherGame = parseOnly parseWholeGames gamePgn
-  isRight eitherGame @? "Game is not read: " ++ show eitherGame
-  let games = catMaybes $ fromJust $ EitherC.rightToMaybe eitherGame
-  assertEqual ("Not all games parsed" ++ show games) number (length games)
+  games <- getGames file number
+  let (lefts, rights) = Data.List.span Data.Either.isLeft games
+  let total = length games
+  assertEqual ((show total) ++  "games. Not all games parsed" ++ show lefts) number (length rights)
 
 
 singleTests = [

@@ -2,12 +2,13 @@ module LogicTest (logicTests) where
 
 import Control.Lens hiding ((.=))
 import Test.HUnit
-import Algorithms
-import Board
-import Logic
 import qualified Data.Set as S
 import qualified Data.Text as Te
 import Data.Maybe
+
+import Chess.Algorithms
+import Chess.Board
+import Chess.Logic
 
 rookPosition = Field A R1
 possibleRookMoves = ["A2", "A7", "B1", "H1"]

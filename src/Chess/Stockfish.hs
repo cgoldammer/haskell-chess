@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
-module Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, singleBestMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
+module Chess.Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, singleBestMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
 
-import Board
-import Logic
-import Helpers
+import Chess.Board
+import Chess.Logic
+import Chess.Helpers
 
 import Control.Applicative
 import Control.Lens

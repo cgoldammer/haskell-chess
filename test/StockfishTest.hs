@@ -2,15 +2,10 @@
 module StockfishTest (stockfishTests) where
 
 import Test.HUnit
-import Algorithms
-import Board
-import Logic
-import Stockfish 
 import qualified Data.Set as S
 import Data.Attoparsec.Text hiding (take, D, takeWhile)
 import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.ByteString.Char8 as C
-import Pgn
 import qualified Data.Text as Te
 import Control.Monad
 import Data.Maybe
@@ -19,6 +14,12 @@ import qualified Data.Either.Combinators as EitherC
 import Data.List
 import Control.Applicative
 import qualified Turtle as Tu
+
+import Chess.Algorithms
+import Chess.Board
+import Chess.Logic
+import Chess.Stockfish 
+import Chess.Pgn
 
 
 positionsMate = [

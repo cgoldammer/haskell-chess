@@ -1,10 +1,11 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
 
-module Algorithms (randomGood, randomPositions) where
+module Chess.Algorithms (randomGood, randomPositions) where
 
-import Board
+import Chess.Board
+import Chess.Logic
+
 import Control.Lens
-import Logic
 import System.Random
 import qualified Data.List.Unique as Un
 import Data.Maybe

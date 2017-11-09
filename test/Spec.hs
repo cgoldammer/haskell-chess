@@ -1,13 +1,15 @@
 import Test.HUnit
-import Algorithms
-import Board
-import Logic
 import qualified Data.Set as S
 import Data.Maybe
+
 import LogicTest
 import PgnTest
 import StringParseTest
 import StockfishTest
+
+import Chess.Algorithms
+import Chess.Board
+import Chess.Logic
 
 main :: IO ()
 main = do

@@ -2,7 +2,7 @@
 -- Pawns, promotion, castling
 
 
-module Logic (allPhysicalMoves, allPiecePhysicalMoves
+module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , GameState (GameState), gsPosition, gsColor
             , CastlingRights
             , defaultGameState, defaultGameStateNoCastle
@@ -27,9 +27,10 @@ module Logic (allPhysicalMoves, allPiecePhysicalMoves
             , canCastleKingSide, canCastleQueenSide
             ) where
 
+import Chess.Board
+import Chess.Helpers
+
 import Data.Maybe
-import Board
-import Helpers
 import Control.Lens
 import Control.Monad
 import Control.Applicative
@@ -41,7 +42,6 @@ import Data.Attoparsec.Text hiding (take, D, takeWhile)
 import Data.Attoparsec.Combinator
 import qualified Data.Attoparsec.ByteString.Char8 as C
 import qualified Data.Either.Combinators as EitherC
-import Helpers
 import Data.List
 import System.IO.Unsafe
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
-module Board (stringToPosition
+module Chess.Board (stringToPosition
             , Piece (..)
             , Field (Field), fieldColumn, fieldRow
             , Position
@@ -26,7 +26,8 @@ module Board (stringToPosition
             , allPieces, allFullPieces, allNonKingPieces, allNonKingFullPieces, allNonPawnPieces
         ) where 
 
-import Helpers
+import Chess.Helpers
+
 import Data.Maybe
 import Data.List
 import Control.Monad

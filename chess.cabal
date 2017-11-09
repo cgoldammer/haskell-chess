@@ -15,7 +15,13 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Helpers, Board, Logic, Algorithms, Stockfish, Pgn, Lib
+  exposed-modules:     
+                       Chess.Board
+                     , Chess.Logic
+                     , Chess.Algorithms
+                     , Chess.Stockfish
+                     , Chess.Pgn
+                     , Chess.Lib
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , lens
@@ -35,18 +41,11 @@ library
                      , MonadRandom
                      , either
                      , optparse-applicative
-  default-language:    Haskell2010
--- 
-executable chess-exe
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base
-                     , chess
+  other-modules:       Chess.Helpers
   default-language:    Haskell2010
 
 executable profile-exe
-  hs-source-dirs:      testApp
+  hs-source-dirs:      profileApp
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
@@ -61,7 +60,7 @@ test-suite chess-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  other-modules:     LogicTest, PgnTest, StringParseTest
+  other-modules:       LogicTest, PgnTest, StringParseTest
   build-depends:       base
                      , chess
                      , lens

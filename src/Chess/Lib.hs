@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 
-module Lib where
+module Chess.Lib (runChess) where
 
 import Data.List
 import qualified Data.Set as S
@@ -8,8 +8,8 @@ import Control.Monad
 import Control.Lens hiding ((.=))
 import qualified Control.Lens as L
 import Data.Maybe
-import Options.Applicative
-import Data.Semigroup ((<>))
+import Options.Applicative -- iding ((<>))
+-- import Data.Semigroup hiding ((<>))
 
 import Text.Read
 import qualified Data.Text as Te
@@ -20,12 +20,13 @@ import Data.Char (chr)
 
 import System.Random
 
-import Algorithms
-import Stockfish
-import Board
-import Logic
+import Chess.Algorithms
+import Chess.Stockfish
+import Chess.Board
+import Chess.Logic
+import Chess.Pgn
+
 import Control.Applicative
-import Pgn
 
 import Data.Aeson
 import qualified Turtle as Tu
@@ -35,10 +36,10 @@ import qualified Turtle as Tu
 mateFromGameState :: GameState -> IO [MateMove]
 mateFromGameState = mateFinder . fullFen . (view gsPosition)
 
-resultsString :: [GameState] -> [[MateMove]] -> String
-resultsString gs mates = U.toString $ encode printable
-    where   goodMateMoves = filter (\(ps, m) -> filterMates m) (zip (fmap (view gsPosition) gs) mates)
-            printable = fmap (\(num, (ps, m)) -> PositionMates num ps m) $ zip [0..] goodMateMoves
+-- resultsString :: [GameState] -> [[MateMove]] -> String
+-- resultsString gs mates = U.toString $ encode printable
+--     where   goodMateMoves = filter (\(ps, m) -> filterMates m) (zip (fmap (view gsPosition) gs) mates)
+--             printable = fmap (\(num, (ps, m)) -> PositionMates num ps m) $ zip [0..] goodMateMoves
 
 data PositionMates = PositionMates Int Position [MateMove]
 
@@ -52,11 +53,11 @@ instance ToJSON PositionMates where
 bestMove :: [MateMove] -> Int -> Move
 bestMove mm num = fst $ head $ filter (\m -> ((snd m) == num)) mm
 
-filterMates :: [MateMove] -> Bool
-filterMates mm = length mm > 0 && numberMin == 1 && minNumber >= 1 && minNumber <= 5
-    where   minNumber = minimum numbers
-            numbers = fmap snd mm
-            numberMin = length $ filter (minNumber==) numbers
+-- filterMates :: [MateMove] -> Bool
+-- filterMates mm = length mm > 0 && numberMin == 1 && minNumber >= 1 && minNumber <= 5
+--     where   minNumber = minimum numbers
+--             numbers = fmap snd mm
+--             numberMin = length $ filter (minNumber==) numbers
 
 
 data ParseInput = ParseInput { 
@@ -75,10 +76,10 @@ fileInput = strOption
   <> metavar "FILENAME"
   <> help "Input file")
 
-stdInput :: Parser Input
-stdInput = flag' StdInput
-  (  long "stdin"
-  <> help "Read from stdin")
+-- stdInput :: Parser Input
+-- stdInput = flag' StdInput
+--   (  long "stdin"
+--   <> help "Read from stdin")
 
 -- input :: Parser Input
 -- input = fileInput <|> stdInput
@@ -92,8 +93,8 @@ runChess = greet =<< execParser opts
       <> header "A header")
 
 greet :: ParseInput -> IO ()
-greet (ParseInput fn sm em gs ge) = do
-  strings <- parseFromFile (show fn) ge
+greet (ParseInput fn sm _ _ ge) = do
+  let strings = [""]
   mapM_ putStrLn strings
   return ()
       
@@ -124,5 +125,4 @@ parse = ParseInput
       <> showDefault
       <> value 1
       <> metavar "INT")
-
 
