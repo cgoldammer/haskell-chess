@@ -8,18 +8,20 @@ module Chess.Pgn (
   , pgnPiece
   , pgnToTargetField, pgnToPromotion
   , PgnTag (..), Player (..)
-  , PgnGame (..)
+  , PgnGame (..), Game(..)
+  , ParsedGame 
   , tagParse
   , eventParse, siteParse, fullTagParse, parseAllTags
   , parseGameMoves, moveParser, bothMoveParser, sidelineParser
   , readSingleGame
-  , pgnGame
+  , pgnGame, pgnGameFromGs, gamePgnMoves
   , gameBlunders
   , gameText
   , BlunderThreshold
   , GameEvaluation(..)
   , startingGS
   , getGames
+  , allPgnsForMove, moveAsPgn, allOtherPgns
   , moveToPgn) where
 
 import Debug.Trace
@@ -101,6 +103,8 @@ expandMove gs mv pf = [withNeither, withColumn, withRow, withBoth]
             withNeither = moveToPgn Standard mv pf
 
 data PgnType = Standard | WithColumn | WithRow | WithBoth
+
+
 
 moveToPgn :: PgnType -> Move -> PieceField -> PgnMove
 moveToPgn Standard mv pf = moveToPgnHelper False False mv pf
@@ -205,6 +209,39 @@ formatForDB (PgnRound s) = ("Round", show s)
 formatForDB (PgnWhite player) = ("White", show player)
 formatForDB (PgnBlack player) = ("White", show player)
 
+gamePgnMoves :: Game -> [PgnMove]
+gamePgnMoves (Game gs mvs) = snd $ foldl nextMove (gs, []) mvs
+
+nextMove :: (GameState, [PgnMove]) -> Move -> (GameState, [PgnMove])
+nextMove (gs, pgnMoves) mv = (gs', pgnMoves ++ [pgnMove])
+  where gs' = move' gs mv
+        pgnMove = moveAsPgn gs mv
+
+-- Find all pgnMoves for this move
+-- Find possible moves and piecefields for all other pieces
+-- Use the first pgnMove that's not in the other moves
+moveAsPgn :: GameState -> Move -> PgnMove
+moveAsPgn gs mv = head $ [pgnM | pgnM <- allPgns, not (pgnM `elem` allOther)]
+  where allOther = allOtherPgns gs mv
+        allPgns = allPgnsForMove gs mv
+
+allPgnsForMove :: GameState -> Move -> [PgnMove]
+allPgnsForMove gs mv = expandMove gs mv pieceField
+  where color = gs ^. gsColor
+        (piece, _) = moveToPieceMove gs mv
+        from = mv ^. moveFrom
+        pieceField = PieceField piece color from
+
+allOtherPgns :: GameState -> Move -> [PgnMove]
+allOtherPgns gs mv = concat $ fmap (uncurry (flip (expandMove gs))) allMovesWithPieceFields
+  where (piece, _) = moveToPieceMove gs mv
+        color = gs ^. gsColor
+        from = mv ^. moveFrom
+        pieceField = PieceField piece color from
+        allMoves = allNextLegalMoves gs
+        allMovesWithPieceFields = [(PieceField p color (m ^. moveFrom), m) | (p, m) <- allMoves, from /= m ^. moveFrom]
+        
+
 data PossibleResult = WhiteWin | Draw | BlackWin deriving (Eq)
 
 instance Show Player where
@@ -228,8 +265,11 @@ pgnMoveFolder (Just gs, _) pgnMove = (gs', mv)
   where gs' = fmap (move gs) mv
         mv = pgnToMove gs pgnMove
 
+pgnAsMovesFromGs :: GameState -> [PgnMove] -> [FullState]
+pgnAsMovesFromGs gs  pgnMoves = scanl pgnMoveFolder (Just gs, Nothing) pgnMoves
+
 pgnAsMoves :: [PgnMove] -> [FullState]
-pgnAsMoves pgnMoves = scanl pgnMoveFolder (Just startingGS, Nothing) pgnMoves
+pgnAsMoves = pgnAsMovesFromGs startingGS
 
 foldGameEither :: Either String [Move] -> Maybe Move -> Either String [Move] 
 foldGameEither (Right mvs) Nothing = Left $ "Parsed moves until " ++ show mvs
@@ -240,6 +280,8 @@ data PgnGame = PgnGame {
     pgnGameTags :: [PgnTag]
   , parsedPgnGame :: Game
   , pgnMoves :: [String] } deriving (Show)
+
+
 
 data Game = Game { startingGameState :: GameState, gameMoves :: [Move] } deriving (Show)
 
@@ -366,13 +408,16 @@ type ParsedGame = Either ParseError PgnGame
 readSingleGame :: Te.Text -> ParsedGame
 readSingleGame text = composeGame $ parseOnly parseGameComponents text
 
-pgnGame :: [PgnMove] -> Either String Game
-pgnGame pgnMoves = fmap (Game startingGS) eitherMoves
-  where fs = pgnAsMoves pgnMoves
+pgnGameFromGs :: GameState -> [PgnMove] -> Either String Game
+pgnGameFromGs gs pgnMoves = fmap (Game gs) eitherMoves
+  where fs = pgnAsMovesFromGs gs pgnMoves
         startingGS = fromJust $ fst $ head fs
         movesWithPiece = tail $ fmap snd fs -- [Maybe (Piece, Move)]
         moves = ((fmap . fmap) snd) movesWithPiece -- [Maybe Move]
         eitherMoves = foldl foldGameEither (Right []) moves
+
+pgnGame :: [PgnMove] -> Either String Game
+pgnGame = pgnGameFromGs startingGS
 
 parseGame :: [PgnTag] -> [PgnMove] -> ParsedGame
 parseGame tags moves = gameParser game

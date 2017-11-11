@@ -161,7 +161,10 @@ secondToMove = fmap snd $ pgnToMove stateAfterFirst "e5"
 
 toGameState :: Position -> GameState
 toGameState ps = defaultGameState ps White
+
+stringToGs :: [String] -> GameState
 stringToGs = toGameState . fromJust . stringToPosition
+
 newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stringToMove mvs
 gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
 
@@ -193,6 +196,21 @@ testExternalPgns = TestCase $ do
   let total = length games
   assertEqual ((show total) ++  "games. Not all games parsed" ++ show lefts) number (length rights)
 
+
+testToPgn :: GameState -> [String] -> Test
+testToPgn gs pgnMoves = (show gs) ~: pgnMoves ~=? actual
+  where game = fromJust $ EitherC.rightToMaybe $ pgnGameFromGs gs pgnMoves
+        actual = gamePgnMoves game
+
+toPgnData :: [([String], [String])]
+toPgnData = [
+    (["WKA1", "WNB1", "BKA8"], ["Nc3"])
+  , (["WKA1", "WNB1", "BKA8", "WND1"], ["Ndc3"])
+  , (["WKA1", "WNB1", "BKA8", "WND5"], ["Nbc3"])
+  , (["WKA1", "WNB1", "BKA8", "WNB5"], ["N1c3"])
+  , (["WKA1", "WNB1", "BKA8", "WNB5", "WND1", "WND5"], ["Nb1c3"])]
+
+toPgnTests = fmap (\(posString, mv) -> testToPgn (stringToGs posString) mv) toPgnData
 
 singleTests = [
     startingPositionParseTest
@@ -228,6 +246,7 @@ pgnTests = [
   , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
   , "Parsing move lists" ~: moveListTests
+  , "Exporting PGN works correctly" ~: toPgnTests
   ]
 
 -- 86 tests total
