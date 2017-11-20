@@ -46,14 +46,11 @@ library
 
 executable profile-exe
   hs-source-dirs:      profileApp
-  main-is:             Main.hs
+  main-is:             ParsePgn.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , chess
-                     , text
                      , either
-                     , attoparsec
-                     , turtle
   default-language:    Haskell2010
 
 test-suite chess-test
