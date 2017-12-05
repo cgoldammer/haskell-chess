@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
-
 module Chess.Lib (runChess) where
 
 import Data.List
@@ -24,7 +22,7 @@ import Chess.Algorithms
 import Chess.Stockfish
 import Chess.Board
 import Chess.Logic
-import Chess.Pgn
+import Chess.Pgn.Logic as Pgn
 
 import Control.Applicative
 

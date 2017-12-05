@@ -1,9 +1,5 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
--- Pawns, promotion, castling
-
-
 module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
-            , GameState (GameState), gsPosition, gsColor
+            , GameState (GameState, _enPassantTarget), gsPosition, gsColor
             , CastlingRights
             , defaultGameState, defaultGameStateNoCastle
             , getPositions
@@ -15,7 +11,7 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , isMate
             , basicFen
             , fullFen
-            , isChecking
+            , isChecking, isTaking
             , filterOutInCheckFull, checkInRoute, isCheckInRoute, gameStateRoutes, routeData, returnCheckingRoute
             , inCheck
             , pieceFields
@@ -25,6 +21,7 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , allOpponentMoves
             , fenStringToPosition
             , canCastleKingSide, canCastleQueenSide
+            , a1, b1, c1, d1, e1, f1, g1, h1, a8, b8, c8, d8, e8, f8, g8, h8
             ) where
 
 import Chess.Board
@@ -147,10 +144,11 @@ updateEnPassant gs mv@(Move from to _)
   | pawnMovedTwo = beforeField 
   | otherwise = Nothing
   where
-      pawnMovedTwo = movedPawn && distance == 2
+      pawnMovedTwo = movedPawn && distance == 2 && fromC == toC
       movedPawn = maybeMovePiece gs mv == Just Pawn
       distance = moveDistance (from, to)
       (Field fromC fromR) = from
+      (Field toC toR) = to
       beforeRow = nextRow fromR (_gsColor gs)
       beforeField = liftM2 Field (Just fromC) beforeRow
 

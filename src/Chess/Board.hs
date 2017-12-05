@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, TemplateHaskell #-}
 module Chess.Board (stringToPosition
             , Piece (..)
             , Field (Field), fieldColumn, fieldRow

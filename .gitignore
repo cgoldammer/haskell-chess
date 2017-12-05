@@ -2,3 +2,4 @@
 .stack*
 *.sw*
 scripts/results.txt
+notes.md

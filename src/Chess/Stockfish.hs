@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 module Chess.Stockfish (mateFinder, MateMove, bestMoves, StockfishMove(..), sortMove, singleBestMove, evaluationNumber, resultLines, readResults, readMoves, Evaluation) where
 
 import Chess.Board

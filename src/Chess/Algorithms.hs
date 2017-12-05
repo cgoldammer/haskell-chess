@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
-
 module Chess.Algorithms (randomGood, randomPositions) where
 
 import Chess.Board

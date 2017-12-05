@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 module PgnTest (pgnTests) where
 
 import Control.Lens
@@ -19,7 +18,8 @@ import qualified Turtle as Tu
 import Chess.Algorithms
 import Chess.Board
 import Chess.Logic
-import Chess.Pgn
+import Chess.Pgn.Logic
+import Chess.Pgn.External
 
 -- I can parse a string, from a starting position
 
@@ -35,7 +35,7 @@ fullMoves = [
 
 pgnEqualMoveTest :: String -> Piece -> String -> Test
 pgnEqualMoveTest moveString piece pgnString = pgnString ~=? pgnMoveParse
-    where   pgnMoveParse = moveToPgn Standard mv pf
+    where   pgnMoveParse = moveToPgn False False Standard mv pf
             mv = fromJust $ stringToMove moveString
             from = mv ^. moveFrom
             pf = PieceField piece White from
@@ -57,11 +57,16 @@ testCastlingParser = ((True, True), (True, True)) ~=? castlingRightsParser "KQkq
 
 tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
+    , ("[Event \"Some - ? Other\"]\n", PgnEvent "Some - ? Other")
+    , ("[Event \"Tata Steel-A 78th\"]\n", PgnEvent "Tata Steel-A 78th")
+    , ("[Result \"1-0\"]\n", PgnResult WhiteWin)
+    , ("[Result \"0-1\"]\n", PgnResult BlackWin)
+    , ("[Result \"1/2-1/2\"]\n", PgnResult Draw)
     , ("[Event \"?\"]\n", PgnEvent "?")
     , ("[Site \"SomeSite\"]\n", PgnSite "SomeSite")
     , ("[Other \"AB\"]\n", PgnOther "Other" "AB")
     , ("[White \"Bo, Anna\"]\n", PgnWhite (Player "Anna" "Bo"))
-    , ("[White \"Bo\"]\n", PgnWhite (Player "" "Bo"))
+    , ("[White \"Van Wely, Loek\"]\n", PgnWhite (Player "Loek" "Van Wely"))
     ]
 
 firstTags = Data.List.concat $ fmap fst tags
@@ -121,7 +126,9 @@ movesGood = [
     , "1.d4 Nf6 2.Bg5 d5 3.Nd2 c6 4.e3 Bf5 5.Bd3 Bg6 6.Ngf3 Nbd7 7.Qe2 Ne4 8.Bxe4 dxe4 9.Nh4 Qa5 10.Nxg6 hxg6 11.Bf4"
     , "1.d4 Nf6 2.Bg5 d5 3.Nd2 c6 4.e3 Bf5 5.Bd3 Bg6"
     , "1.d4 Nf6 2.Bg5 g6 3.Bxf6 exf6 4.e3 Bg7 5.g3 d5 6.Bg2 c6 7.Ne2 O-O 8.Nd2 Nd7 9.c4 dxc4 10.Nxc4 Nb6 11.Na5 Nd5 12.Qd2 f5 13.b4 Re8 14.Rc1 a6 15.a3 Re7 16.Rxc6 Bh6 17.Rc5 Nxe3 18.fxe3 Bxe3 19.Qd3 f4 20.gxf4 Bg4 21.Re5 Rxe5 22.fxe5 Bh6 23.Qe4 Bf5 24.Qxb7 Qh4+ 25.Ng3 Rc8 26.Nc6 Rxc6 27.Qxc6 Qxd4 28.Qa8+ Kg7 29.Nxf5+ gxf5 30.Qf3 Qd2+ 31.Kf1 Be3 32.Qg3+ Kf8 33.Bf3 f4 34.Qe1 Qd3+ 35.Qe2 Qb1+ 36.Kg2 Qg6+ 37.Kh3  1-0"
-      ]
+    , " 1. g3 g6 2. Bg2 Bg7 3. e4 e5 4. Ne2 c5 5. d3 Nc6 6. Be3 d6 7. Qd2 Nd4 8. c3 Nxe2 9. Qxe2 Ne7 10. h4 h6 11. h5 g5 12. f4 exf4 13. gxf4 gxf4 14. Bxf4 Nc6 15.  Na3 Be5 16. Be3 Be6 17. Nc4 Bg3+ 18. Kd2 Qd7 19. d4 cxd4 20. cxd4 Ne5 21. Nxe5 dxe5 22. d5 Bg4 23. Bf3 Bxf3 24. Qxf3 Qb5 25. Rac1 Qxb2+ 26. Kd1 Bf4 27. Bxf4 exf4 28. Qxf4 Rg8 29. Rf1 Qd4+ 30. Ke1 Qb4+ 31. Kd1 Qd4+ 32. Ke1 Qb4+ 1/2-1/2" ]
+
+tt = " 1. g3 g6 2. Bg2 Bg7 3. e4 e5 4. Ne2 c5 5. d3 Nc6 6. Be3 d6 7. Qd2 Nd4 8. c3 Nxe2 9. Qxe2 Ne7 10. h4 h6 11. h5 g5 12. f4 exf4 13. gxf4 gxf4 14. Bxf4 Nc6 15.  Na3 Be5 16. Be3 Be6 17. Nc4 Bg3+ 18. Kd2 Qd7 19. d4 cxd4 20. cxd4 Ne5 21. Nxe5 dxe5"
 
 testMovesNonParse :: String -> Test
 testMovesNonParse s = Nothing ~=? parsed
@@ -133,9 +140,9 @@ testMovesGood :: String -> Test
 testMovesGood s = isRight game ~? error
     where parsedPgnMoves = parseOnly parseGameMoves $ Te.pack s -- Either String [Move]
           toEitherGame (Left s) = Left s
-          toEitherGame (Right m) = Right $ pgnGame m
+          toEitherGame (Right m) = pgnGame m
           game = toEitherGame parsedPgnMoves
-          error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
+          error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves ++ show game
 
 
 fullParse = [
@@ -158,9 +165,8 @@ stateAfterSecond = move stateAfterFirst (Pawn, secondMove)
 firstToMove = fmap snd $ pgnToMove startingGS "e4"
 secondToMove = fmap snd $ pgnToMove stateAfterFirst "e5"
 
-
 toGameState :: Position -> GameState
-toGameState ps = defaultGameState ps White
+toGameState ps = defaultGameStateNoCastle ps White
 
 stringToGs :: [String] -> GameState
 stringToGs = toGameState . fromJust . stringToPosition
@@ -169,7 +175,7 @@ newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stri
 gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
 
 testPromotionParse = TestCase $ assertBool error $ isJust mv
-  where mv = pgnToMove gsPromote "g8Q"
+  where mv = pgnToMove gsPromote "g8=Q+"
         error = "Can parse promotion move"
 
 tagFilter :: Te.Text -> Bool
@@ -180,11 +186,11 @@ testExternalPgn = TestCase $ do
     let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
     let eitherTags = parseOnly parseAllTags $ Te.unlines tagPart
     isRight eitherTags @? "Game tags not read: " ++ show tagPart
-    let (_, gamePart) = Te.breakOn "1." gamePgn
+    let (_, gamePart) = Te.breakOn "1. " gamePgn
     let eitherMoves = parseOnly parseGameMoves gamePart
     isRight eitherMoves @? "Moves are not read: " ++ show gamePart ++ show eitherMoves
     let eitherGameFromMoves = pgnGame $ fromJust $ EitherC.rightToMaybe eitherMoves
-    isRight eitherGameFromMoves @? "Moves are not a game: " ++ show eitherGameFromMoves
+    isRight eitherGameFromMoves @? "Moves are not a game: " ++ show gamePgn ++ show eitherGameFromMoves
     let eitherGame = readSingleGame gamePgn
     isRight eitherGame @? "Game is not read: " ++ show eitherGame
 
@@ -208,9 +214,28 @@ toPgnData = [
   , (["WKA1", "WNB1", "BKA8", "WND1"], ["Ndc3"])
   , (["WKA1", "WNB1", "BKA8", "WND5"], ["Nbc3"])
   , (["WKA1", "WNB1", "BKA8", "WNB5"], ["N1c3"])
-  , (["WKA1", "WNB1", "BKA8", "WNB5", "WND1", "WND5"], ["Nb1c3"])]
+  , (["WKA1", "WNB1", "BKA8", "WNB5", "WND1", "WND5"], ["Nb1c3"])
+  , (["WKA1", "BKA8", "WRB2"], ["Ra2+"])
+  ]
+
+toPgnDataCastles = [
+    (["WKE1", "WRH1", "BKA8"], ["O-O"], \s -> defaultGameState (stringPos s) White)
+  , (["WKE1", "WRH1", "BKF8"], ["O-O+"], \s -> defaultGameState (stringPos s) White)
+  , (["WKE1", "BKE8", "BRA8"], ["O-O-O"], \s -> defaultGameState (stringPos s) Black)]
+
+toPgnDataPromotes = [
+    (["WKA1", "BKA8", "WPC7"], ["c8=Q+"], \s -> defaultGameStateNoCastle (stringPos s) White)
+  , (["WKE1", "BKA8", "WPC7", "BND8"], ["cxd8=B"], \s -> defaultGameStateNoCastle (stringPos s) White)
+  , (["WKE1", "BKE8", "BPC2"], ["c1=Q+"], \s -> defaultGameStateNoCastle (stringPos s) Black)]
+
+stringPos = fromJust . stringToPosition
 
 toPgnTests = fmap (\(posString, mv) -> testToPgn (stringToGs posString) mv) toPgnData
+
+createExpandedPgnTest = fmap (\(posString, mv, gsFun) -> testToPgn (gsFun posString) mv)
+
+toPgnTestsCastles = createExpandedPgnTest toPgnDataCastles
+toPgnTestsPromotes = createExpandedPgnTest toPgnDataPromotes
 
 singleTests = [
     startingPositionParseTest
@@ -247,6 +272,8 @@ pgnTests = [
   , "Tag parsing" ~: testTags
   , "Parsing move lists" ~: moveListTests
   , "Exporting PGN works correctly" ~: toPgnTests
+  , "Exporting PGN Castling works correctly" ~: toPgnTestsCastles
+  , "Exporting PGN Promotion works correctly" ~: toPgnTestsPromotes
   ]
 
 -- 86 tests total

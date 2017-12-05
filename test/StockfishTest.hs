@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, ScopedTypeVariables #-}
 module StockfishTest (stockfishTests) where
 
 import Test.HUnit
@@ -19,7 +18,7 @@ import Chess.Algorithms
 import Chess.Board
 import Chess.Logic
 import Chess.Stockfish 
-import Chess.Pgn
+import Chess.Pgn.Logic as Pgn
 
 
 positionsMate = [
