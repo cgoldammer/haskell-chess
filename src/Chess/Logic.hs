@@ -1,5 +1,5 @@
 module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
-            , GameState (GameState, _enPassantTarget), gsPosition, gsColor
+            , GameState (..), gsPosition, gsColor
             , CastlingRights
             , defaultGameState, defaultGameStateNoCastle
             , getPositions
@@ -7,7 +7,7 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , ownPieceFields
             , allNextLegalMoves, allStandardMoves, opponentCount, opponentNum, allControllingFields
             , filterOutInCheck
-            , move, move', updatePositionMove, moveToPieceMove, tryMoves
+            , move, move', updatePositionMove, tryMoves, movePiece
             , isMate
             , basicFen
             , fullFen
@@ -28,34 +28,38 @@ import Chess.Board
 import Chess.Helpers
 
 import Data.Maybe
-import Control.Lens
-import Control.Monad
-import Control.Applicative
+import Control.Lens as L
+import Control.Monad hiding ((^.))
+import Control.Applicative hiding ((^.))
 import qualified Data.String.Utils as SU
 import qualified Data.Char as C
 import qualified Data.Text as Te
 import qualified Text.Read as TR
 import Data.Attoparsec.Text hiding (take, D, takeWhile)
-import Data.Attoparsec.Combinator
+import Data.Attoparsec.Combinator hiding ((^.))
 import qualified Data.Attoparsec.ByteString.Char8 as C
 import qualified Data.Either.Combinators as EitherC
 import Data.List
 import System.IO.Unsafe
 
--- Defining fields that are checked often.
+-- The following fields are often used as part of the chess logic, so I'm defining
+-- them as variables and exporting them.
 rowFields row = fmap (fromJust . stringToField) [c : (show row) | c <- ['A'..'H']]
 [a1, b1, c1, d1, e1, f1, g1, h1] = rowFields 1 
 [a8, b8, c8, d8, e8, f8, g8, h8] = rowFields 8
 
+
 type CastlingRights = ((Bool, Bool), (Bool, Bool))
 
+-- | A `GameState` describes the current game position fully. It contains the same information as the
+-- Fen notation <https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation>.
 data GameState = GameState {
       _gsPosition :: Position
     , _gsColor :: Color
-    , _castlingRights :: CastlingRights
-    , _enPassantTarget :: Maybe Field
-    , _halfMove :: Int
-    , _fullMove :: Int} deriving (Eq, Show)
+    , _gsCastlingRights :: CastlingRights
+    , _gsEnPassantTarget :: Maybe Field
+    , _gsHalfMove :: Int
+    , _gsFullMove :: Int} deriving (Eq, Show)
 makeLenses ''GameState
 
 defaultGameState :: Position -> Color -> GameState
@@ -65,115 +69,142 @@ defaultGameStateNoCastle :: Position -> Color -> GameState
 defaultGameStateNoCastle ps color = GameState ps color ((False, False), (False, False)) Nothing 0 1
 
 movePiece :: GameState -> Move -> Piece
-movePiece gs (Move from to _) = (selectByPosition (_gsPosition gs) [from] !! 0) ^. pfPiece
-
-maybeMovePiece :: GameState -> Move -> Maybe Piece
-maybeMovePiece gs (Move from to _) = fmap (view pfPiece) $ safeHead $ selectByPosition (gs ^. gsPosition) [from]
-
--- This is a helper function that just updates the gamestate position, but not logic like
+movePiece gs mv = (head matchingPieces) ^. pfPiece
+  where from = mv ^. moveFrom
+        matchingPieces = selectByPosition (gs ^. gsPosition) [from]
+        
+-- | This is a helper function that just updates the gamestate position, but not logic like
 -- castling rights. It is vastly faster, and used to determine whether I'm moving into a check.
 updatePositionMove :: GameState -> (Piece, Move) -> GameState
-updatePositionMove gs (piece, mv@(Move from to promotion)) = GameState newPosition newColor cr ept hm fm
-  where   newColor = invertColor oldColor
-          oldColor = _gsColor gs
-          oldPosition = _gsPosition gs
-          removePosition = filter (\pf -> not (elem (pf ^. pfField) [from, to])) oldPosition
-          newPosition = removePosition ++ [PieceField piece oldColor to]
-          cr = _castlingRights gs
-          ept = _enPassantTarget gs
-          hm = _halfMove gs
-          fm = _fullMove gs
-
-moveToPieceMove :: GameState -> Move -> (Piece, Move)
-moveToPieceMove gs mv = (movePiece gs mv, mv)
+updatePositionMove = undefined
+-- updatePositionMove gs (piece, mv@(Move from to promotion)) = GameState newPosition newColor cr ept hm fm
+--   where   newColor = invertColor oldColor
+--           color = _gsColor gs
+--           oldPosition = _gsPosition gs
+--           removePosition = filter (\pf -> not (elem (pf ^. pfField) [from, to])) oldPosition
+--           newPosition = removePosition ++ [PieceField piece oldColor to]
+--           cr = _castlingRights gs
+--           ept = _enPassantTarget gs
+--           hm = gsHalfMove ^. gs
+--           fm = gsFullMove ^. gs
 
 tryMoves :: Maybe GameState -> [Move] -> Maybe GameState
 tryMoves Nothing _ = Nothing
 tryMoves (Just gs) [] = Just gs
-tryMoves (Just gs) (mv : rest) = if isLegalMove then tryMoves (Just (move gs pm)) rest else Nothing
-  where pm = moveToPieceMove gs mv
+tryMoves (Just gs) (mv : rest) = if isLegalMove then tryMoves (Just (move gs piece mv)) rest else Nothing
+  where piece = movePiece gs mv
         isLegalMove = elem mv $ fmap snd $ allNextLegalMoves gs
 
-move :: GameState -> (Piece, Move) -> GameState
-move gs (piece, mv@(Move from@(Field colFrom rowFrom) to@(Field colTo rowTo) promotion)) = GameState newPosition' newColor newCr newEp hm fm
-  where   newColor = invertColor oldColor
-          oldColor = gs ^. gsColor
+type IsTaking = Bool
+type IsPawnMove = Bool
+
+updateFullMove :: Color -> Int -> Int
+updateFullMove White n = n
+updateFullMove Black n = n + 1
+
+updateHalfMove :: GameState -> Move -> Int -> Int
+updateHalfMove _ (EnPassantMove _ _ _) _ = 1
+updateHalfMove gs mv@(StandardMove from to) n = if (isTakingMove || isPawnMove) then 1 else updateFullMove color n
+  where isTakingMove = isTaking gs to
+        isPawnMove = movePiece gs mv == Pawn
+        color = gs ^. gsColor
+
+getPositionChange :: GameState -> Piece -> Move -> ([Field], [PieceField])
+getPositionChange gs piece (StandardMove from to) = (removePf, addPf)
+  where position = gs ^. gsPosition
+        removePf = [from]
+        color = gs ^. gsColor
+        addPf = [PieceField piece color to]
+getPositionChange gs Pawn (PromotionMove from to piece) = (removePf, addPf)
+  where position = gs ^. gsPosition
+        removePf = [from]
+        color = gs ^. gsColor
+        addPf = [PieceField piece color to]
+getPositionChange gs King (CastlingMove from to rookFrom rookTo) = (removePf, addPf)
+  where position = gs ^. gsPosition
+        removePf = [from, rookFrom]
+        color = gs ^. gsColor
+        addPf = [PieceField King color to, PieceField Rook color rookTo]
+getPositionChange gs Pawn (EnPassantMove from to pawnCapturedField) = (removePf, addPf)
+  where position = gs ^. gsPosition
+        removePf = [pawnCapturedField]
+        color = gs ^. gsColor
+        addPf = [PieceField Pawn color to]
+
+removeFieldFromPosition :: Position -> Field -> Position
+removeFieldFromPosition position field = [pf | pf <- position, pf ^. pfField /= field]
+
+updatePosition :: Position -> [Field] -> [PieceField] -> Position
+updatePosition position remove add = (foldl removeFieldFromPosition position remove) ++ add
+
+move :: GameState -> Piece -> Move -> GameState
+move gs piece mv = GameState newPosition newColor newCastlingRights newEnPassant newHalfMove newFullMove
+  where   oldColor = gs ^. gsColor
+          newColor = invertColor oldColor
           oldPosition = gs ^. gsPosition
-          removeFields = [from, to] ++ epTarget
-          removePosition = filter (\pf -> not (elem (pf ^. pfField) removeFields)) oldPosition
-          isEP = isEnPassant ept piece (from, to)
-          epTarget = if isEP then [Field colTo rowFrom] else []
-          newPiece = if isJust promotion then fromJust promotion else piece
-          newPosition = removePosition ++ [PieceField newPiece oldColor to]
-          newPosition' = if isCastle 
-            then (updateCastlingRook isCastleKing oldColor newPosition) 
-            else newPosition
-          isCastle = isCastling piece mv
-          cr = gs ^. castlingRights
-          ept = gs ^. enPassantTarget
-          hm = gs ^. halfMove
-          fm = gs ^. fullMove
-          newCr = updateCastlingRights gs mv
-          newEp = updateEnPassant gs mv
-          isCastleKing = isCastle && (to == g1 || to == g8)
+          newPosition = (uncurry (updatePosition oldPosition)) $ getPositionChange gs piece mv
+          newHalfMove = updateHalfMove gs mv (gs ^. gsHalfMove)
+          newFullMove = updateFullMove oldColor (gs ^. gsFullMove)
+          newCastlingRights = updateCastlingRights gs mv
+          newEnPassant = updateEnPassant gs mv
 
 move' :: GameState -> Move -> GameState
-move' gs mv = move gs $ moveToPieceMove gs mv
-
-isCastling :: Piece -> Move -> Bool
-isCastling King (Move from to mp) = (from == e1 && (to == g1 || to == c1)) || (from == e8 && (to == g8 || to == c8))
-isCastling _ _ = False
+move' gs mv = move gs (movePiece gs mv) mv
 
 type CastleKingSide = Bool
 
-updatePosition :: Position -> Field -> Field -> Position
-updatePosition ps field newField = newPf : [p | p <- ps, p /= pf]
-    where pf = head $ filter (\p -> p ^. pfField == field) ps
-          newPf = PieceField piece color newField
-          piece = pf ^. pfPiece
-          color = pf ^. pfColor
+-- updatePosition :: Position -> Field -> Field -> Position
+-- updatePosition ps field newField = newPf : [p | p <- ps, p /= pf]
+--     where pf = head $ filter (\p -> p ^. pfField == field) ps
+--           newPf = PieceField piece color newField
+--           piece = pf ^. pfPiece
+--           color = pf ^. pfColor
 
-updateCastlingRook :: CastleKingSide -> Color -> Position -> Position
-updateCastlingRook True White ps = updatePosition ps h1 f1
-updateCastlingRook False White ps = updatePosition ps a1 d1
-updateCastlingRook True Black ps = updatePosition ps h8 f8
-updateCastlingRook False Black ps = updatePosition ps a8 d8
+-- updateCastlingRook :: CastleKingSide -> Color -> Position -> Position
+-- updateCastlingRook True White ps = updatePosition ps h1 f1
+-- updateCastlingRook False White ps = updatePosition ps a1 d1
+-- updateCastlingRook True Black ps = updatePosition ps h8 f8
+-- updateCastlingRook False Black ps = updatePosition ps a8 d8
 
 updateEnPassant :: GameState -> Move -> Maybe Field
-updateEnPassant gs mv@(Move from to _)
-  | pawnMovedTwo = beforeField 
-  | otherwise = Nothing
-  where
-      pawnMovedTwo = movedPawn && distance == 2 && fromC == toC
-      movedPawn = maybeMovePiece gs mv == Just Pawn
-      distance = moveDistance (from, to)
-      (Field fromC fromR) = from
-      (Field toC toR) = to
-      beforeRow = nextRow fromR (_gsColor gs)
-      beforeField = liftM2 Field (Just fromC) beforeRow
+updateEnPassant = undefined
+-- updateEnPassant gs mv@(StandardMove from to)
+--   | pawnMovedTwo = beforeField 
+--   | otherwise = Nothing
+--   where
+--       pawnMovedTwo = movedPawn && distance == 2 && fromC == toC
+--       movedPawn = maybeMovePiece gs mv == Just Pawn
+--       distance = moveDistance (from, to)
+--       (Field fromC fromR) = from
+--       (Field toC toR) = to
+--       beforeRow = nextRow fromR (_gsColor gs)
+--       beforeField = liftM2 Field (Just fromC) beforeRow
+-- updateEnPassant gs _ = Nothing
 
 nextRow :: Row -> Color -> Maybe Row
 nextRow r White = intRow $ (rowInt r) + 1
 nextRow r Black = intRow $ (rowInt r) - 1
 
 updateCastlingRights :: GameState -> Move -> CastlingRights
-updateCastlingRights gs mv = updatedBothRights where
-    (castleWhite, castleBlack) = _castlingRights gs
-    (castleK, castleQ) = if color == White then castleWhite else castleBlack
-    updatedRights = (castleK && (not castleKLost), castleQ && (not castleQLost))
-    updatedBothRights = if color == White then (updatedRights, castleBlack) else (castleWhite, updatedRights)
-    color = _gsColor gs
-    kingMoved = movePiece gs mv == King
-    queenRookMoved = (color == White && mv ^. moveFrom == a1) || (color == Black && mv ^. moveFrom == a8)
-    kingRookMoved = (color == White && mv ^. moveFrom == h1) || (color == Black && mv ^. moveFrom == h8)
-    castleKLost = kingMoved || kingRookMoved
-    castleQLost = kingMoved || queenRookMoved
+updateCastlingRights = undefined
+-- updateCastlingRights gs mv = updatedBothRights where
+--     (castleWhite, castleBlack) = _castlingRights gs
+--     (castleK, castleQ) = if color == White then castleWhite else castleBlack
+--     updatedRights = (castleK && (not castleKLost), castleQ && (not castleQLost))
+--     updatedBothRights = if color == White then (updatedRights, castleBlack) else (castleWhite, updatedRights)
+--     color = _gsColor gs
+--     kingMoved = movePiece gs mv == King
+--     queenRookMoved = (color == White && mv ^. moveFrom == a1) || (color == Black && mv ^. moveFrom == a8)
+--     kingRookMoved = (color == White && mv ^. moveFrom == h1) || (color == Black && mv ^. moveFrom == h8)
+--     castleKLost = kingMoved || kingRookMoved
+--     castleQLost = kingMoved || queenRookMoved
 
 pieceFieldForMove :: GameState -> Move -> PieceField
-pieceFieldForMove gs mv = head [pf | pf <- _gsPosition gs, mv ^. moveFrom == pf ^. pfField]
+pieceFieldForMove = undefined
+-- pieceFieldForMove gs mv = head [pf | pf <- gs ^. gsPosition, mv ^. from == pf ^. pfField]
 
 allNextStates :: GameState -> [GameState]
-allNextStates gs = fmap (move gs) (allNextLegalMoves gs)
+allNextStates gs = fmap (uncurry (move gs)) (allNextLegalMoves gs)
 
 isMate :: GameState -> Bool
 isMate gs = noNextMoves && inCheck gs
@@ -192,8 +223,9 @@ allNextLegalMoves :: GameState -> [(Piece, Move)]
 allNextLegalMoves gs = filterOutInCheck gs $ allPhysicalMoves gs
     
 inCheck :: GameState -> Bool
-inCheck gs@(GameState ps color cr ept hm fm) = (ownKingField gs) `elem` opponentFields
-  where opponentFields = fmap (view moveTo) $ allStandardMoves . invertGameStateColor $ gs
+inCheck = undefined
+-- inCheck gs@(GameState ps color cr ept hm fm) = (ownKingField gs) `elem` opponentFields
+--   where opponentFields = fmap (view to) $ allStandardMoves . invertGameStateColor $ gs
 
 isChecking :: GameState -> Bool
 isChecking = inCheck . invertGameStateColor
@@ -207,15 +239,16 @@ filterOutInCheckFull gs pms = filter notInCheck pms
 ownKingField gs = head $ fmap (view pfField) $ filter ((==King) . (view pfPiece)) $ ownPieceFields gs
 
 filterOutInCheck :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
-filterOutInCheck gs moves = legalKingMoves ++ filteredOtherMoves
-  where (kingMoves, otherMoves) = partition (\(p, m) -> p == King) moves
-        kingField = ownKingField gs
-        allOpponentControlledFields = allControllingFields $ invertGameStateColor gs
-        filterControlling = \(_, m) -> not ((m ^. moveTo) `elem` allOpponentControlledFields)
-        legalKingMoves = filter filterControlling kingMoves
-        routes = gameStateRoutes gs
-        routeFilter = \(_, m) -> not (isCheckInRoute m routes)
-        filteredOtherMoves = filter routeFilter otherMoves
+filterOutInCheck = undefined
+-- filterOutInCheck gs moves = legalKingMoves ++ filteredOtherMoves
+--   where (kingMoves, otherMoves) = partition (\(p, m) -> p == King) moves
+--         kingField = ownKingField gs
+--         allOpponentControlledFields = allControllingFields $ invertGameStateColor gs
+--         filterControlling = \(_, m) -> not ((m ^. moveTo) `elem` allOpponentControlledFields)
+--         legalKingMoves = filter filterControlling kingMoves
+--         routes = gameStateRoutes gs
+--         routeFilter = \(_, m) -> not (isCheckInRoute m routes)
+--         filteredOtherMoves = filter routeFilter otherMoves
         
 
 -- All opponent pieces that could possibly check the king in the current position,
@@ -223,16 +256,17 @@ filterOutInCheck gs moves = legalKingMoves ++ filteredOtherMoves
 data CheckingRoute = CheckingRoute { routePiece :: PieceField, routeBetweenFields :: [Field], routeBetweenPiece :: Maybe PieceField, routeKingPosition :: Field} deriving Show
 
 checkInRoute :: CheckingRoute -> Move -> Bool
-checkInRoute cr mv = (not inCheck && creatingCheck) || (inCheck && not preventingCheck)
-  where creatingCheck = movingPieceInBetween && not pieceIsBetweenAfterMove && not takingPiece
-        preventingCheck = inCheck && (pieceIsBetweenAfterMove || takingPiece)
-        takingPiece = to == (routePiece cr) ^. pfField
-        pieceIsBetweenAfterMove = to `elem` betweenFields
-        (to, from) = (mv ^. moveTo, mv ^. moveFrom)
-        betweenFields = routeBetweenFields cr
-        betweenPiece = routeBetweenPiece cr
-        inCheck = not $ isJust $ routeBetweenPiece cr
-        movingPieceInBetween = Just from == fmap (view pfField) betweenPiece
+checkInRoute = undefined
+-- checkInRoute cr mv = (not inCheck && creatingCheck) || (inCheck && not preventingCheck)
+--   where creatingCheck = movingPieceInBetween && not pieceIsBetweenAfterMove && not takingPiece
+--         preventingCheck = inCheck && (pieceIsBetweenAfterMove || takingPiece)
+--         takingPiece = to == (routePiece cr) ^. pfField
+--         pieceIsBetweenAfterMove = to `elem` betweenFields
+--         (to, from) = (mv ^. moveTo, mv ^. moveFrom)
+--         betweenFields = routeBetweenFields cr
+--         betweenPiece = routeBetweenPiece cr
+--         inCheck = not $ isJust $ routeBetweenPiece cr
+--         movingPieceInBetween = Just from == fmap (view pfField) betweenPiece
     
 isCheckInRoute :: Move -> [CheckingRoute] -> Bool
 isCheckInRoute mv = any $ (flip checkInRoute) mv
@@ -306,26 +340,28 @@ pawnTakingFields color (Field col row) = catMaybes [left, right]
         right = liftA2 Field rightCol newRow
 
 allControllingFieldsHelper :: GameState -> PieceField -> [Field]
-allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = fmap (view moveTo) goodMoves
-    where fields = pieceFields pf
-          withCount = fmap (opponentNum (fmap (view pfField) position)) fields
-          goodFields = concat $ (fmap . fmap) fst $ fmap (takeWhile (\(_, c) -> c <= 1)) withCount
-          goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
-          goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
-          goodMoves = concat $ fmap (addSpecialMoves piece color) goodMoveFilterPawn
+allControllingFieldsHelper = undefined
+-- allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = fmap (view moveTo) goodMoves
+--     where fields = pieceFields pf
+--           withCount = fmap (opponentNum (fmap (view pfField) position)) fields
+--           goodFields = concat $ (fmap . fmap) fst $ fmap (takeWhile (\(_, c) -> c <= 1)) withCount
+--           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
+--           goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
+--           goodMoves = concat $ fmap (addSpecialMoves piece color) goodMoveFilterPawn
           
 allOpponentFields gs = fmap (view pfField) $ ownPieceFields $ invertGameStateColor gs
 
 allStandardPhysicalMoves :: GameState -> PieceField -> [Move]
-allStandardPhysicalMoves gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = goodMoves
-    where fields = pieceFields pf
-          withCount = fmap (opponentNum opponentFields) fields
-          goodFields = concat $ fmap (takeWhile notOwn) $ (fmap . fmap) fst $ fmap (takeWhile (\(_, c) -> c <= 1)) withCount
-          goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
-          goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
-          goodMoves = concat $ fmap (addSpecialMoves piece color) goodMoveFilterPawn
-          notOwn f = not $ f `elem` (fmap (view pfField) (ownPieceFields gs))
-          opponentFields = allOpponentFields gs
+allStandardPhysicalMoves = undefined
+-- allStandardPhysicalMoves gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = goodMoves
+--     where fields = pieceFields pf
+--           withCount = fmap (opponentNum opponentFields) fields
+--           goodFields = concat $ fmap (takeWhile notOwn) $ (fmap . fmap) fst $ fmap (takeWhile (\(_, c) -> c <= 1)) withCount
+--           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
+--           goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
+--           goodMoves = concat $ fmap (addSpecialMoves piece color) goodMoveFilterPawn
+--           notOwn f = not $ f `elem` (fmap (view pfField) (ownPieceFields gs))
+--           opponentFields = allOpponentFields gs
           
 opponentCount :: Eq a => [a] -> [a] -> Int -> [(a, Int)]
 opponentCount fs [] n = zip fs (repeat n)
@@ -348,14 +384,15 @@ filterPawnMoves gs Pawn ml = filter (isLegalPawnMove gs) ml
 filterPawnMoves _ _ ml = ml
 
 nonPawnMove :: MoveLocation -> Move
-nonPawnMove (from, to) = Move from to Nothing
+nonPawnMove (from, to) = StandardMove from to
 
 isLegalPawnMove :: GameState -> MoveLocation -> Bool
-isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || ((not isGoingForward) && (taking || isEP))
-    where   isGoingForward = to ^. fieldColumn == from ^. fieldColumn
-            taking = isTaking gs to
-            notTaking = not taking
-            isEP = isEnPassant (_enPassantTarget gs) Pawn (from, to)
+isLegalPawnMove = undefined
+-- isLegalPawnMove gs ml@(from, to) = (isGoingForward && notTaking) || ((not isGoingForward) && (taking || isEP))
+--     where   isGoingForward = to ^. fieldColumn == from ^. fieldColumn
+--             taking = isTaking gs to
+--             notTaking = not taking
+--             isEP = isEnPassant (_enPassantTarget gs) Pawn (from, to)
 
 isTaking :: GameState -> Field -> Bool
 isTaking gs to = elem to $ fmap (view pfField) (opponentPieceFields gs)
@@ -403,13 +440,8 @@ freeField gs f = not $ elem f $ fmap (view pfField) $ _gsPosition gs
 isEnPassant :: Maybe Field -> Piece -> MoveLocation -> Bool
 isEnPassant ept piece (from, to) = piece == Pawn && ept == Just to
 
-addSpecialMoves :: Piece -> Color -> MoveLocation -> [Move]
-addSpecialMoves Pawn White ml@((Field _ R7), _) = addPromotionMoves ml
-addSpecialMoves Pawn Black ml@((Field _ R2), _) = addPromotionMoves ml
-addSpecialMoves _ _ ml@((from, to)) = [Move from to Nothing]
-
 addPromotionMoves :: MoveLocation -> [Move]
-addPromotionMoves (from, to) = [Move from to (Just piece) | piece <- allNonKingFullPieces]
+addPromotionMoves (from, to) = [PromotionMove from to piece | piece <- allNonKingFullPieces]
 
 ownPieceFields :: GameState -> [PieceField]
 ownPieceFields gs = filter (\pf -> pf ^. pfColor == _gsColor gs) (_gsPosition gs)
@@ -470,7 +502,6 @@ getPositions gs pc = fmap (view pfField) $ filter isRightPiece position
             color = _gsColor gs
             position = _gsPosition gs
             
-
 selectByPosition :: Position -> [Field] -> Position
 selectByPosition ps fs = filter (\pf -> (elem (pf ^. pfField) fs)) ps
 
@@ -480,7 +511,7 @@ pieceFieldFen :: Maybe PieceField -> Char
 pieceFieldFen Nothing = '1'
 pieceFieldFen (Just (PieceField piece color field)) = pieceChar
     where   pieceChar = transformer pieceLetter
-            pieceLetter = (shortPiece piece) !! 0
+            pieceLetter = (showPiece piece) !! 0
             transformer 
                 | color == White = id
                 | color == Black = C.toLower
@@ -518,7 +549,7 @@ gameStateToFen gs@(GameState ps color cr ept hm fm) = intercalate " " elements
         epString = epToString ept
 
 epToString :: Maybe Field -> String
-epToString (Just f) = fmap C.toLower $ shortField f
+epToString (Just f) = fmap C.toLower $ showField f
 epToString Nothing = "-"
 
 fullFen :: Position -> Fen

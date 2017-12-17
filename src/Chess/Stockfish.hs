@@ -116,6 +116,9 @@ parseHash = do
   space
   return ()
 
+stockfishMoveRead :: String -> Move
+stockfishMoveRead = undefined
+
 stockfishLineParser :: Parser StockfishMove
 stockfishLineParser = do
     string "info depth "
@@ -138,8 +141,8 @@ stockfishLineParser = do
     string " time "
     many' digit
     string " pv "
-    mv <- many' (letter <|> digit)
+    mvString <- many' (letter <|> digit)
     many' (letter <|> digit <|> space <|> char '\r')
-    let move = fromJust $ stringToMove $ fmap Ch.toUpper $ mv
+    let move = stockfishMoveRead mvString
     return $ StockfishMove move pvNumber eval
 

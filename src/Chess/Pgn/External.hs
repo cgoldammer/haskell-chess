@@ -1,3 +1,7 @@
+-- | Functionality to read external PGNs. This module deals with getting the
+-- data into an intermediate format that can then be used by the `Chess.Pgn.Logic` module
+-- to be parsed into a full `Game`.
+
 module Chess.Pgn.External where
 
 import Control.Monad

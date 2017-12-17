@@ -1,10 +1,14 @@
+-- | This module describes the core physical layout of a chess
+-- board, including pieces and moves.
+
 module Chess.Board (stringToPosition
             , Piece (..)
             , Field (Field), fieldColumn, fieldRow
             , Position
             , Color (White, Black)
             , PieceField (PieceField)
-            , Move (Move), moveFrom, moveTo, movePromotionPiece
+            , Move (..)
+            , moveFrom, moveTo, promotionPiece, rookFrom, rookTo
             , pfField, pfColor, pfPiece
             , fieldToInt
             , rowInt, columnInt
@@ -12,12 +16,10 @@ module Chess.Board (stringToPosition
             , invertColor
             , intColumn
             , allRows
-            , stringToPieceField
-            , stringToField, stringToMove
-            , stringToPiece
+            , stringToPieceField , stringToField , stringToPiece
             , colorString, colorToString
             , allColumns
-            , shortPiece, shortColumn, shortRow, shortField, shortMove
+            , showPiece, showColumn, showRow, showField, showMove
             , Column (A, B, C, D, E, F, G, H)
             , Row (R1, R2, R3, R4, R5, R6, R7, R8)
             , MoveLocation
@@ -33,12 +35,8 @@ import Control.Monad
 import Text.Read
 import Control.Lens
 
+-- The chess pieces, ordered by value (starting with the King)
 data Piece = King | Queen | Rook | Bishop | Knight | Pawn deriving (Enum, Eq, Ord)
-data Column = A | B | C | D | E | F | G | H deriving (Enum, Ord, Eq)
-data Row = R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 deriving (Enum, Ord, Eq)
-
-allColumns = [A ..]
-allRows = [R1 ..]
 
 allPieces = [King ..]
 allFullPieces = [King .. Knight]
@@ -46,34 +44,57 @@ allNonKingPieces = [Queen ..]
 allNonKingFullPieces = [Queen .. Knight]
 allNonPawnPieces = [King .. Knight]
 
+-- The columns and rows of a chess board
+data Column = A | B | C | D | E | F | G | H deriving (Enum, Ord, Eq)
+allColumns = [A ..]
+
+data Row = R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 deriving (Enum, Ord, Eq)
+allRows = [R1 ..]
+
+-- The colors for the two players in a chess game
 data Color = White | Black deriving (Enum, Ord, Eq)
 
+-- A field consists of a column and a row.
 data Field = Field { _fieldColumn :: Column, _fieldRow :: Row } deriving (Eq, Ord)
 makeLenses ''Field
 
-
-data Move = Move {_moveFrom :: Field, _moveTo :: Field, _movePromotionPiece :: Maybe Piece} deriving (Eq, Ord)
+data Move = StandardMove { _moveFrom :: Field, _moveTo :: Field }
+    | PromotionMove { _moveFrom :: Field, _moveTo :: Field, _promotionPiece :: Piece }
+    | EnPassantMove { _moveFrom :: Field, _moveTo :: Field, pawnCaptured :: Field }
+    | CastlingMove { _moveFrom :: Field, _moveTo :: Field, _rookFrom :: Field, _rookTo :: Field }
+    deriving (Eq)
 makeLenses ''Move
 
+-- | A `MoveLocation` is a simplified version of a `Move` that denotes only the
+-- starting and destination fields.
 type MoveLocation = (Field, Field)
 
+-- | A `PieceField` describes a specific piece that is positioned on a specific field on the board.
+-- For instance, this could be a "Black bishop on a7", which includes the piece, the color
+-- and the field.
 data PieceField = PieceField {_pfPiece :: Piece, _pfColor :: Color, _pfField :: Field} deriving (Eq)
 makeLenses ''PieceField
 
+-- A chess position is simply a list of piece fields, and if we combine a chess position with other
+-- metadata about the game history, for instance castling rights, we get the full game state.
 type Position = [PieceField]
 
 instance Show Move where
-  show = shortMove
+  show = showMove
 
-shortMove :: Move -> String
-shortMove (Move from to pr) = fromS ++ toS ++ p
-  where fromS = shortField from
-        toS = shortField to
-        p = prShow pr
+showMove :: Move -> String
+showMove (StandardMove from to) = showField from ++ showField to
+showMove (EnPassantMove from to _) = showMove (StandardMove from to)
+showMove (CastlingMove from to rookFrom rookTo) = castlingName to
+
+castlingName :: Field -> String
+castlingName (Field G _) = "O-O"
+castlingName (Field C _) = "O-O"
+castlingName _ = undefined
     
 prShow :: Maybe Piece -> String
 prShow Nothing = ""
-prShow (Just p) = shortPiece p
+prShow (Just p) = showPiece p
 
 fieldColor :: Field -> Color
 fieldColor (Field c r)
@@ -81,38 +102,38 @@ fieldColor (Field c r)
     | otherwise = White
     where isEven i = mod i 2 == 0
 
-shortColor :: Color -> String
-shortColor White = "W"
-shortColor Black = "B"
+showColor :: Color -> String
+showColor White = "W"
+showColor Black = "B"
 
-shortPiece :: Piece -> String
-shortPiece Knight = "N"
-shortPiece King = "K"
-shortPiece Queen = "Q"
-shortPiece Rook = "R"
-shortPiece Bishop = "B"
-shortPiece Pawn = "P"
+showPiece :: Piece -> String
+showPiece Knight = "N"
+showPiece King = "K"
+showPiece Queen = "Q"
+showPiece Rook = "R"
+showPiece Bishop = "B"
+showPiece Pawn = "P"
 
-shortColumn :: Column -> String
-shortColumn c = [['A'..'H'] !! ((columnInt c) - 1)]
+showColumn :: Column -> String
+showColumn c = [['A'..'H'] !! ((columnInt c) - 1)]
 
-shortRow :: Row -> String
-shortRow r = show $ rowInt r
+showRow :: Row -> String
+showRow r = show $ rowInt r
 
-shortField :: Field -> String
-shortField (Field c r) = shortColumn c ++ shortRow r
+showField :: Field -> String
+showField (Field c r) = showColumn c ++ showRow r
 
 instance Show Color where
-    show = shortColor
+    show = showColor
 
 instance Show Piece where
-    show = shortPiece
+    show = showPiece
 
 instance Show Row where
-    show = shortRow
+    show = showRow
 
 instance Show Column where
-    show = shortColumn
+    show = showColumn
 
 instance Show Field where
     show (Field c r) = show c ++ show r
@@ -147,19 +168,6 @@ colorToString Black = "B"
 stringToField :: String -> Maybe Field
 stringToField [c, r] = liftM2 Field (charColumn c) (join (fmap intRow (readMaybe [r])))
 stringToField _ = Nothing
-
-stringToMove :: String -> Maybe Move
-stringToMove (c1 : c2 : c3 : c4 : rest) = join $ makeMaybe parseSucceeded $ liftM2 (\f t -> Move f t promotionPiece) from to
-  where from = stringToField [c1, c2]
-        to = stringToField [c3, c4]
-        promotionPieceAttempt = case rest of 
-          [] -> Left Nothing
-          otherwise -> Right $ stringToPiece rest
-        (promotionPiece, parseSucceeded) = case promotionPieceAttempt of
-          Left Nothing -> (Nothing, True)
-          Right Nothing -> (Nothing, False)
-          Right val -> (val, True)
-
 
 stringToPieceField :: String -> Maybe PieceField 
 stringToPieceField [colS, pieceS, cS, rS]
