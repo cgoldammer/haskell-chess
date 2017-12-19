@@ -146,3 +146,45 @@ stockfishLineParser = do
     let move = stockfishMoveRead mvString
     return $ StockfishMove move pvNumber eval
 
+stringToCastleMove "e1g1" = Just $ CastlingMove e1 g1 h1 f1
+stringToCastleMove "e8g8" = Just $ CastlingMove e8 g8 h8 f8
+stringToCastleMove "e1c1" = Just $ CastlingMove e1 c1 a1 d1
+stringToCastleMove "e8c8" = Just $ CastlingMove e8 c8 a8 d8
+stringToCastleMove _ = Nothing
+
+getMoversCastlingRights :: GameState -> (Bool, Bool)
+getMoversCastlingRights gs = if (color == White) then castleWhite else castleBlack
+  where (castleWhite, castleBlack) = gs ^. gsCastlingRights
+        color = gs ^. gsColor
+
+canCastle :: GameState -> Bool
+canCastle gs = castleKing || castleQueen
+  where (castleKing, castleQueen) = getMoversCastlingRights gs
+
+isCastleMove :: GameState -> String -> Bool
+isCastleMove gs mv = (mv `elem` ["e1g1", "e8g8", "e1c1", "e8c8"]) && canCastle gs
+
+isPromotionMove mv = length mv == 5
+
+stringToMove :: GameState -> String -> Maybe Move
+stringToMove gs mv
+  | isCastleMove gs mv = stringToCastleMove mv
+  | otherwise = nonCastleStringToMove gs mv
+
+parsePromotionPiece :: String -> Maybe Piece
+parsePromotionPiece p
+  | p `elem` ["QRBN"] = stringToPiece p
+  | otherwise = Nothing
+
+nonCastleStringToMove :: GameState -> String -> Maybe Move
+nonCastleStringToMove gs (c1 : c2 : c3 : c4 : rest) = move
+  where from = stringToField [c1, c2]
+        to = stringToField [c3, c4] 
+        promotionPiece = parsePromotionPiece rest
+        fromPiece = safeHead [pf ^. pfPiece | pf <- gs ^. gsPosition, Just (pf ^. pfField) == from]
+        epTarget = gs ^. gsEnPassantTarget
+        isEp = epTarget == to && fromPiece == Just Pawn
+        moveEnPassant = EnPassantMove <$> from <*> to <*> epTarget
+        movePromotion = PromotionMove <$> from <*> to <*> promotionPiece
+        moveStandard = StandardMove <$> from <*> to
+        move = if isEp then (if isJust promotionPiece then movePromotion else moveEnPassant) else moveStandard
