@@ -2,12 +2,14 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , GameState (..), gsPosition, gsColor, gsCastlingRights, gsEnPassantTarget
             , CastlingRights
             , defaultGameState, defaultGameStateNoCastle
+            , startingGS
             , getPositions
             , invertGameStateColor
             , ownPieceFields
             , allNextLegalMoves, allStandardMoves, opponentCount, opponentNum, allControllingFields
             , filterOutInCheck
-            , move, move', updatePositionMove, tryMoves, movePiece
+            , parsePromotionPiece
+            , move, move', updatePositionMove, tryMoves, movePiece, pawnTakenField
             , isMate
             , basicFen
             , fullFen
@@ -21,12 +23,17 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , allOpponentMoves
             , fenStringToPosition
             , canCastleKingSide, canCastleQueenSide
+            , stringToMove
             , a1, b1, c1, d1, e1, f1, g1, h1, a8, b8, c8, d8, e8, f8, g8, h8
+            , MoveReader
+            , Game (..)
+            , gameFromString, gameFromStart
             ) where
 
 import Chess.Board
 import Chess.Helpers
 
+import Debug.Trace
 import Data.Maybe
 import Control.Lens as L
 import Control.Monad hiding ((^.))
@@ -48,7 +55,6 @@ rowFields row = fmap (fromJust . stringToField) [c : (show row) | c <- ['A'..'H'
 [a1, b1, c1, d1, e1, f1, g1, h1] = rowFields 1 
 [a8, b8, c8, d8, e8, f8, g8, h8] = rowFields 8
 
-
 type CastlingRights = ((Bool, Bool), (Bool, Bool))
 
 -- | A `GameState` describes the current game position fully. It contains the same information as the
@@ -67,6 +73,14 @@ defaultGameState ps color = GameState ps color ((True, True), (True, True)) Noth
 
 defaultGameStateNoCastle :: Position -> Color -> GameState
 defaultGameStateNoCastle ps color = GameState ps color ((False, False), (False, False)) Nothing 0 1
+
+startGameString = [
+    "WRA1", "WNB1", "WBC1", "WQD1", "WKE1", "WBF1", "WNG1", "WRH1"
+  , "WPA2", "WPB2", "WPC2", "WPD2", "WPE2", "WPF2", "WPG2", "WPH2"
+  , "BPA7", "BPB7", "BPC7", "BPD7", "BPE7", "BPF7", "BPG7", "BPH7"
+  , "BRA8", "BNB8", "BBC8", "BQD8", "BKE8", "BBF8", "BNG8", "BRH8"]
+startingGS = defaultGameState (fmap (fromJust . stringToPieceField) startGameString) White
+
 
 movePiece :: GameState -> Move -> Piece
 movePiece gs mv = (head matchingPieces) ^. pfPiece
@@ -113,9 +127,16 @@ getPositionChange gs King (CastlingMove from to rookFrom rookTo) = (removePf, ad
         addPf = [PieceField King color to, PieceField Rook color rookTo]
 getPositionChange gs Pawn (EnPassantMove from to pawnCapturedField) = (removePf, addPf)
   where position = gs ^. gsPosition
-        removePf = [pawnCapturedField]
         color = gs ^. gsColor
+        fieldTaken = fromJust $ pawnTakenField pawnCapturedField color
+        removePf = [from, fieldTaken]
         addPf = [PieceField Pawn color to]
+
+pawnTakenField :: Field -> Color -> Maybe Field
+pawnTakenField (Field column row) color = Field <$> Just column <*> takenRow
+  where rowNumber = rowInt row
+        rowChange = if (color == White) then (-1) else (1)
+        takenRow = intRow $ rowNumber + rowChange
 
 removeFieldFromPosition :: Position -> Field -> Position
 removeFieldFromPosition position field = [pf | pf <- position, pf ^. pfField /= field]
@@ -335,7 +356,7 @@ allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField 
 allOpponentFields gs = fmap (view pfField) $ ownPieceFields $ invertGameStateColor gs
 
 allStandardPhysicalMoves :: GameState -> PieceField -> [Move]
-allStandardPhysicalMoves gs pf@(PieceField piece _ field) = fmap (uncurry StandardMove) completeGoodFields
+allStandardPhysicalMoves gs pf@(PieceField piece _ field) = if pawnPromotes then promotionMoves else standardMoves
   where fields = pieceFields pf
         withCount = fmap (opponentNum opponentFields) fields
         notOwn f = not $ f `elem` (fmap (view pfField) (ownPieceFields gs))
@@ -343,6 +364,13 @@ allStandardPhysicalMoves gs pf@(PieceField piece _ field) = fmap (uncurry Standa
         opponentFields = allOpponentFields gs
         goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
         completeGoodFields = if piece == Pawn then [ml | ml <- goodMoveFields, isLegalPawnMove gs ml] else goodMoveFields
+        promotionRow = if (gs ^. gsColor) == White then R7 else R2
+        pawnPromotes = (piece == Pawn) && ((field ^. fieldRow) == promotionRow)
+        standardMoves = fmap (uncurry StandardMove) completeGoodFields
+        promotionMoves = concat $ fmap addPromotionMoves completeGoodFields
+        
+addPromotionMoves :: MoveLocation -> [Move]
+addPromotionMoves (from, to) = [PromotionMove from to piece | piece <- allNonKingFullPieces]
 
 
 opponentCount :: Eq a => [a] -> [a] -> Int -> [(a, Int)]
@@ -411,9 +439,6 @@ freeField gs f = not $ elem f $ fmap (view pfField) $ _gsPosition gs
 
 isEnPassant :: Maybe Field -> Piece -> MoveLocation -> Bool
 isEnPassant ept piece (from, to) = piece == Pawn && ept == Just to
-
-addPromotionMoves :: MoveLocation -> [Move]
-addPromotionMoves (from, to) = [PromotionMove from to piece | piece <- allNonKingFullPieces]
 
 ownPieceFields :: GameState -> [PieceField]
 ownPieceFields gs = filter (\pf -> pf ^. pfColor == _gsColor gs) (_gsPosition gs)
@@ -606,4 +631,114 @@ castlingRightsChar False _ _ = ""
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
           (toX, toY) = fieldToInt to
+
+
+stringToCastleMove "E1G1" = Just $ (King, CastlingMove e1 g1 h1 f1)
+stringToCastleMove "E8G8" = Just $ (King, CastlingMove e8 g8 h8 f8)
+stringToCastleMove "E1C1" = Just $ (King, CastlingMove e1 c1 a1 d1)
+stringToCastleMove "E8C8" = Just $ (King, CastlingMove e8 c8 a8 d8)
+stringToCastleMove _ = Nothing
+
+getMoversCastlingRights :: GameState -> (Bool, Bool)
+getMoversCastlingRights gs = if (color == White) then castleWhite else castleBlack
+  where (castleWhite, castleBlack) = gs ^. gsCastlingRights
+        color = gs ^. gsColor
+
+canCastle :: GameState -> Bool
+canCastle gs = castleKing || castleQueen
+  where (castleKing, castleQueen) = getMoversCastlingRights gs
+
+isCastleMove :: GameState -> String -> Bool
+isCastleMove gs mv = (mv `elem` ["E1G1", "E8G8", "E1C1", "E8C8"]) && canCastle gs
+
+
+stringToMove :: MoveReader
+stringToMove gs mv
+  | isCastleMove gs mv = stringToCastleMove mv
+  | otherwise = nonCastleStringToMove gs mv
+
+parsePromotionPiece :: String -> Maybe Piece
+parsePromotionPiece p
+  | length p == 1 && (head p) `elem` ("QRBN" :: String) = stringToPiece p
+  | otherwise = Nothing
+
+nonCastleStringToMove :: GameState -> String -> Maybe (Piece, Move)
+nonCastleStringToMove gs (c1 : c2 : c3 : c4 : rest) = (,) <$> fromPiece <*> move
+  where from = stringToField [c1, c2]
+        to = stringToField [c3, c4] 
+        promotionPiece = parsePromotionPiece rest
+        fromPiece = safeHead [pf ^. pfPiece | pf <- gs ^. gsPosition, Just (pf ^. pfField) == from]
+        epTarget = gs ^. gsEnPassantTarget
+        isEp = epTarget == to && fromPiece == Just Pawn
+        moveEnPassant = EnPassantMove <$> from <*> to <*> epTarget
+        movePromotion = PromotionMove <$> from <*> to <*> promotionPiece
+        moveStandard = StandardMove <$> from <*> to
+        move = if (not isEp) then (if isJust promotionPiece then movePromotion else moveStandard) else moveEnPassant
+
+type MoveReader = GameState -> String -> Maybe (Piece, Move)
+
+type FullState = (Maybe GameState, Maybe (Piece, Move))
+
+pgnMoveFolder :: MoveReader -> FullState -> String -> FullState
+pgnMoveFolder mr (Nothing, _) _ = (Nothing, Nothing)
+pgnMoveFolder mr (Just gs, _) pgnMove = (gs', mv)
+  where mv = mr gs pgnMove
+        gs' = fmap (uncurry (move gs)) mv
+
+gsFromStringMoves :: MoveReader -> GameState -> [String] -> [FullState]
+gsFromStringMoves mr gs pgnMoves = scanl (pgnMoveFolder mr) (Just gs, Nothing) pgnMoves
+
+gsFromStringMovesStart :: MoveReader -> [String] -> [FullState]
+gsFromStringMovesStart mr mvs = gsFromStringMoves mr startingGS mvs
+
+-- foldGame :: MoveReader -> Either String Game -> String -> Either Game
+-- foldGame = undefined
+-- foldGame = mr (Left err) _ = Left err
+-- foldGame mr (Right game) mvString = 
+--   where gs = tail $ gameStates game
+--         mv = mr gs mvString -- Maybe (Piece, Move)
+--         newGs = fmap (uncurry (move gs)) mv -- Maybe GameState
+--         newData = undefined -- Maybe (GameState, Move)
+--         movesSoFar = gameMoves game
+--         gameMoveNumber = div (length movesSoFar) 2
+--         error = "Parsed moves until " ++ show gameMoveNumber ++ show movesSoFar
+
+
+-- foldGameEither :: Either String [Move] -> Maybe Move -> Either String [Move] 
+-- foldGameEither (Right mvs) Nothing = Left $ "Parsed moves until " ++ show (div (length mvs) 2) ++ show mvs
+-- foldGameEither (Right mvs) (Just mv) = Right $ mvs ++ [mv]
+-- foldGameEither (Left err) _ = Left err
+
+-- | A `Game` consists of a starting game state and a list of moves.
+-- Todo: This implementation allows creating a game with illegal moves.
+-- I should aim to prevent this using a newtype.
+data Game = Game { 
+    startingGameState :: GameState
+  , gameStates :: [GameState]
+  , gameMoves :: [Move] } deriving (Show)
+
+createGameFromAccum :: GameState -> ([GameState], [Move]) -> Game
+createGameFromAccum startingGs (gs, mvs) = Game startingGs (reverse gs) (reverse mvs)
+
+gameFromString :: MoveReader -> GameState -> [String] -> Either String Game
+gameFromString mr startingGs stringMoves = fmap (createGameFromAccum startingGs) gameAccum
+  where gameAccum = gameFromStringAccum mr (Right ([startingGs], [])) stringMoves
+
+gameFromStringAccum :: MoveReader -> Either String ([GameState], [Move]) -> [String] -> Either String ([GameState], [Move])
+gameFromStringAccum mr (Left error) _ = Left error
+gameFromStringAccum mr (Right (gsList, mvList)) [] = Right (gsList, mvList)
+gameFromStringAccum mr (Right (currentGs : restGs, mvList)) (nextStringMove : restStringMoves) = case parsedMove of
+          Just (gs, m) -> gameFromStringAccum mr (Right ((gs : currentGs : restGs), (m : mvList))) restStringMoves
+          Nothing         -> Left error
+  where gameMoveNumber = div (length mvList) 2
+        error = "Parsed moves until " ++ show gameMoveNumber ++ show mvList
+        parsedMove = tryParsingMove mr currentGs nextStringMove -- Maybe (GameState, Piece, Move)
+
+tryParsingMove :: MoveReader -> GameState -> String -> Maybe (GameState, Move)
+tryParsingMove mr gs stringMove = (,) <$> executedMove <*> (fmap snd parsedMove)
+  where parsedMove = mr gs stringMove -- Maybe (Piece, Move)
+        executedMove = fmap (uncurry (move gs)) parsedMove -- Maybe GameState
+    
+gameFromStart :: MoveReader -> [String] -> Either String Game
+gameFromStart mr mvs = gameFromString mr startingGS mvs
 

@@ -62,7 +62,7 @@ data Move = StandardMove { _moveFrom :: Field, _moveTo :: Field }
     | PromotionMove { _moveFrom :: Field, _moveTo :: Field, _promotionPiece :: Piece }
     | EnPassantMove { _moveFrom :: Field, _moveTo :: Field, pawnCaptured :: Field }
     | CastlingMove { _moveFrom :: Field, _moveTo :: Field, _rookFrom :: Field, _rookTo :: Field }
-    deriving (Eq)
+    deriving (Eq, Ord)
 makeLenses ''Move
 
 -- | A `MoveLocation` is a simplified version of a `Move` that denotes only the
@@ -84,12 +84,13 @@ instance Show Move where
 
 showMove :: Move -> String
 showMove (StandardMove from to) = showField from ++ showField to
-showMove (EnPassantMove from to _) = showMove (StandardMove from to)
+showMove (EnPassantMove from to _) = showMove (StandardMove from to) ++ "EP"
+showMove (PromotionMove from to piece) = showMove (StandardMove from to) ++ "=" ++ show piece
 showMove (CastlingMove from to rookFrom rookTo) = castlingName to
 
 castlingName :: Field -> String
 castlingName (Field G _) = "O-O"
-castlingName (Field C _) = "O-O"
+castlingName (Field C _) = "O-O-O"
 castlingName _ = undefined
     
 prShow :: Maybe Piece -> String
