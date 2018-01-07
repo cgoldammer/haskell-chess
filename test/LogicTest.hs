@@ -104,7 +104,7 @@ pawnTestWhite = testFromString "white pawns" ["C3", "C4", "D3", "E5", "D5"] [] $
 blackGS = invertGameStateColor whiteGS
 pawnTestBlack = testFromString "black pawns" ["E4", "D3"] ["E3"] $ pawnToFields blackGS
 
-blackGSEP = GameState pawnP Black ((False, False), (False, False)) (Just (Field E R3)) 0 1
+blackGSEP = GameState pawnP Black castleNone (Just (Field E R3)) 0 1
 pawnTestBlackEP = testFromString "black pawns" ["E4", "D3", "E3"] [] $ pawnToFields blackGSEP
 
 promotePos = catMaybes $ fmap stringToPieceField ["WKA1", "WPE7", "BKA8", "BRF8", "WKE8"]
@@ -132,7 +132,7 @@ posCastleBoth = fromJust $ stringToPosition ["WRA1", "WKE1", "WRH1", "BKG8"]
 gsCastleBoth = toGameState posCastleBoth
 
 testCastleBoth = TestCase $ assertEqual error (S.fromList movesExpected) intersection
-    where error = "Both castling moves should be possible"
+    where error = "Both castling moves should be possible for white"
           intersection = intersect possible movesExpected
           possible = allNextLegalMoves gsCastleBoth
           movesExpected = catMaybes $ fmap (stringToMove gsCastleBoth) ["E1C1", "E1G1"]
@@ -141,7 +141,7 @@ posCastleBothBlack = fromJust $ stringToPosition ["WKE1", "BKE8", "BKA8", "BRH8"
 gsCastleBothBlack = invertGameStateColor $ toGameState posCastleBothBlack
 
 testCastleBothBlack = TestCase $ assertEqual error (S.fromList movesExpected) intersection
-    where error = "Both castling moves should be possible"
+    where error = "Both castling moves should be possible for black"
           intersection = intersect possible movesExpected
           possible = allNextLegalMoves gsCastleBothBlack
           movesExpected = catMaybes $ fmap (stringToMove gsCastleBothBlack) ["E8C8", "E8G8"]
@@ -170,8 +170,8 @@ testCastleSide cr mv = TestCase $ assertEqual error (S.fromList movesExpected) i
           intersection = intersect possible movesExpected
           kingFields = fmap ((view moveTo) . snd) $ filter (\m -> fst m == King) $ allNextLegalMoves gsCastleOne
 
-crKing = ((True, False), (False, False))
-crQueen = ((False, True), (False, False))
+crKing = PlayerData (CastlingData True False) (CastlingData False False)
+crQueen = PlayerData (CastlingData False True) (CastlingData False False)
 testCastleOneSide = [
     testCastleSide crKing "E1G1",
     testCastleSide crQueen "E1C1"]

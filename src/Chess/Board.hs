@@ -201,4 +201,9 @@ intRow i = safeIndex (i - 1) allRows
 intColumn :: Int -> Maybe Column
 intColumn i = safeIndex (i - 1) allColumns
 
+flipRow :: Row -> Row
+flipRow row = fromJust $ intRow $ 9 - (rowInt row)
+
+flipField :: Field -> Field
+flipField (Field column row) = Field column (flipRow row)
 
