@@ -3,8 +3,7 @@
 -- and it represents the full logic of the PGN in a structured format.
 
 module Chess.Pgn.Logic (
-    startGameFen
-  , pgnToMove, cleanPgn, pgnAsMoves
+    pgnToMove, cleanPgn --, -- pgnAsMoves
   , PgnType (Standard, WithColumn, WithRow, WithBoth)
   , possibleMoveFields
   , pgnPiece
@@ -19,14 +18,12 @@ module Chess.Pgn.Logic (
   , parseGameMoves, moveParser, bothMoveParser, sidelineParser
   , readSingleGame
   , gameSummaries
-  , pgnGame, pgnGameFromGs, gamePgnMoves, gamePgnFull
-  , pgnAsMovesFromGs, pgnMoveFolder
-  , createPgnMoves, expandMove, expandMoveFormatted
+  , gamePgnMoves, gamePgnFull
+  , createPgnMoves, expandMove
   , gameText
   , unsafeMoves
   , BlunderThreshold
   , GameEvaluation(..)
-  , startingGS
   , getGames
   , allPgnsForMove, moveAsPgn, allOtherPgns
   , moveToPgn) where
@@ -71,24 +68,28 @@ renameCastles "O-O-O" White = "Kc1"
 renameCastles "O-O-O" Black = "Kc8"
 renameCastles pgnMove _ = pgnMove
 
+isPromotionMove :: Move -> Bool
+isPromotionMove (PromotionMove _ _ _) = True
+isPromotionMove _ = False
+
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
-possibleMoveFields = undefined
--- possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
---     where   
---             allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
---             pgnCleaned = renameCastles (filter filterMoves pgn) color
---             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
---             targetField = pgnToTargetField pgnWithoutPromotion
---             movePiece = pgnPiece pgnWithoutPromotion
---             color = gs ^. gsColor
---             movesWithPieceFields = [(mv, PieceField piece color (mv ^. moveFrom)) | (piece, mv) <- allMoves, targetField == Just (mv ^. moveTo) && promotionPiece == mv ^. movePromotionPiece]
---             movesWithPiece = [(pf ^. pfPiece, m) | (m, pf) <- movesWithPieceFields]
---             error = "PGN" ++ pgnCleaned ++ "Pro:" ++ show (pgnToPromotion pgnCleaned) ++ "Target field" ++ show targetField ++ "PF:" ++ show movesWithPieceFields
---             pgnMoves = createPgnMoves gs movesWithPieceFields
+possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
+    where   
+            allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
+            pgnCleaned = renameCastles (filter filterMoves pgn) color
+            (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
+            relevantMoves = filter (if (isJust promotionPiece) then (isPromotionMove . snd) else (not . isPromotionMove. snd)) allMoves
+            targetField = pgnToTargetField pgnWithoutPromotion
+            movePiece = pgnPiece pgnWithoutPromotion
+            color = gs ^. gsColor
+            movesWithPieceFields = [(mv, PieceField piece color (mv ^. moveFrom)) | (piece, mv) <- relevantMoves, targetField == Just (mv ^. moveTo)]
+            movesWithPiece = [(pf ^. pfPiece, m) | (m, pf) <- movesWithPieceFields]
+            error = "PGN" ++ pgnCleaned ++ "Pro:" ++ show (pgnToPromotion pgnCleaned) ++ "Target field" ++ show targetField ++ "PF:" ++ show movesWithPieceFields
+            pgnMoves = createPgnMoves gs movesWithPieceFields
 
 pgnToTargetField pgn = stringToField $ fmap Ch.toUpper $ reverse $ Data.List.take 2 $ reverse pgn
 
-pgnToMove :: GameState -> PgnMove -> Maybe (Piece, Move)
+pgnToMove :: MoveReader
 pgnToMove gs pgn = listToMaybe [mv | (mv, pgnList) <- possible, pgn `elem` pgnList]
     where color = gs ^. gsColor
           possible = possibleMoveFields gs pgn
@@ -106,40 +107,38 @@ pgnPiece pgnMove
 
 createPgnMoves :: GameState -> [(Move, PieceField)] -> [[PgnMove]]
 createPgnMoves gs ls = fmap (uncurry expander) ls
-  where expander mv pf = expandMoveFormatted gs mv pf
+  where expander mv pf = expandMove gs mv pf
 
-replaceString :: Move -> PieceField -> (String, String)
-replaceString = undefined
--- replaceString mv pf 
---   | (mv, pf) == (Move e1 g1 Nothing, PieceField King White e1) = ("Kg1", "O-O")
---   | (mv, pf) == (Move e1 c1 Nothing, PieceField King White e1) = ("Kc1", "O-O-O")
---   | (mv, pf) == (Move e8 g8 Nothing, PieceField King Black e8) = ("Kg8", "O-O")
---   | (mv, pf) == (Move e8 c8 Nothing, PieceField King Black e8) = ("Kc8", "O-O-O")
---   | otherwise = ("_", "_")
+-- replaceString :: Move -> (String, String)
+-- replaceString (CastlingMove e1 g1 h1 f1) = "O-O"
+-- replaceString (CastlingMove e1 c1 a1 f1) = "O-O-O"
+-- replaceString (CastlingMove e8 g8 h8 f8) = "O-O"
+-- replaceString (CastlingMove e8 c8 a8 d8) = "O-O-O"
+-- replaceString _ = ("_", "_")
 
-addCastleFormat :: Move -> PieceField -> String -> String
-addCastleFormat mv pf pgn = uncurry (\mv pf -> SUtils.replace mv pf pgn) $ replaceString mv pf
+-- addCastleFormat :: Move -> PieceField -> String -> String
+-- addCastleFormat mv pf pgn = uncurry (\mv pf -> SUtils.replace mv pf pgn) $ replaceString mv
 
-expandMoveFormatted :: GameState -> Move -> PieceField -> [PgnMove]
-expandMoveFormatted gs mv pf = fmap (addCastleFormat mv pf) $ expandMove gs mv pf
+-- expandMoveFormatted :: GameState -> Move -> PieceField -> [PgnMove]
+-- expandMoveFormatted gs mv pf = fmap (addCastleFormat mv pf) $ expandMove gs mv pf
 
 expandMove :: GameState -> Move -> PieceField -> [PgnMove]
-expandMove = undefined
--- expandMove gs mv pf = expanded 
---     where   withColumn = moveHelper WithColumn mv pf
---             withNeither = moveHelper Standard mv pf
---             withRow = moveHelper WithRow mv pf
---             withBoth = moveHelper WithBoth mv pf
---             piece = pf ^. pfPiece
---             isCheck = inCheck $ move gs $ (piece, mv)
---             isEp = Just (mv ^. moveTo) == (_enPassantTarget gs) && piece == Pawn
---             isTake = (isTaking gs (mv ^. moveTo)) || isEp
---             moveHelper = moveToPgn isCheck isTake
---             expandedFull = [withNeither, withColumn, withRow, withBoth]
---             expanded = case () of _
---                                     | (piece == Pawn) && isTake -> [withColumn]
---                                     | (piece == Pawn) && not isTake -> [withNeither]
---                                     | otherwise -> expandedFull
+expandMove _ cm@(CastlingMove _ _ _ _) _ = [show cm]
+expandMove gs mv pf = expanded 
+    where   withColumn = moveHelper WithColumn mv pf
+            withNeither = moveHelper Standard mv pf
+            withRow = moveHelper WithRow mv pf
+            withBoth = moveHelper WithBoth mv pf
+            piece = pf ^. pfPiece
+            isCheck = inCheck $ move gs piece mv
+            isEp = Just (mv ^. moveTo) == (gs ^. gsEnPassantTarget) && piece == Pawn
+            isTake = (isTaking gs (mv ^. moveTo)) || isEp
+            moveHelper = moveToPgn isCheck isTake
+            expandedFull = [withNeither, withColumn, withRow, withBoth]
+            expanded = case () of _
+                                    | (piece == Pawn) && isTake -> [withColumn]
+                                    | (piece == Pawn) && not isTake -> [withNeither]
+                                    | otherwise -> expandedFull
 
 data PgnType = Standard | WithColumn | WithRow | WithBoth
 
@@ -154,29 +153,28 @@ moveToPgn isCheck isTake pgnType mv pf = uncurry helper $ bools
   where helper = moveToPgnHelper isCheck isTake mv pf 
         bools = convertPgnTypeToBools pgnType
 
+promotionString :: Move -> Maybe String
+promotionString (PromotionMove _ _ piece) = Just $ showPiece piece
+promotionString _ = Nothing
+
 moveToPgnHelper :: Bool -> Bool -> Move -> PieceField -> Bool -> Bool -> PgnMove
-moveToPgnHelper = undefined
--- moveToPgnHelper isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
---   where
---     pieceString = pgnPieceChar $ pf ^. pfPiece
---     columnString = fmap Ch.toLower $ shortColumn $ (mv ^. moveFrom) ^. fieldColumn
---     rowString = shortRow $ mv ^. moveFrom ^. fieldRow
---     targetString = fmap Ch.toLower $ shortField $ mv ^. moveTo
---     takeString = makeMaybe isTake "x"
---     checkString = makeMaybe isCheck "+"
---     promoteString = fmap (('=':) . shortPiece) $ mv ^. movePromotionPiece
---     values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, takeString, Just targetString, promoteString, checkString]
+moveToPgnHelper isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
+  where
+    pieceString = pgnPieceChar $ pf ^. pfPiece
+    columnString = fmap Ch.toLower $ showColumn $ (mv ^. moveFrom) ^. fieldColumn
+    rowString = showRow $ mv ^. moveFrom ^. fieldRow
+    targetString = fmap Ch.toLower $ showField $ mv ^. moveTo
+    takeString = makeMaybe isTake "x"
+    checkString = makeMaybe isCheck "+"
+    promoteString = fmap ('=':) $ promotionString mv
+    values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, takeString, Just targetString, promoteString, checkString]
 
 
 pgnPieceChar :: Piece -> String
 pgnPieceChar piece = filter (not . (`elem` ("P"::String))) $ showPiece piece
 
-startGameFen = "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-gs = parseOnly parseFen (Te.pack startGameFen)
-startingGS = fromJust $ either (const Nothing) Just gs
-
 gamePgnMoves :: Game -> [PgnMove]
-gamePgnMoves (Game gs mvs) = snd $ foldl nextPgnMove (gs, []) mvs
+gamePgnMoves (Game startGs _ mvs) = snd $ foldl nextPgnMove (startGs, []) mvs
 
 gamePgnFull :: Game -> String
 gamePgnFull = addNumbers . gamePgnMoves
@@ -207,55 +205,21 @@ moveAsPgn gs mv = head $ [pgnM | pgnM <- allPgns, not (pgnM `elem` allOther)]
         allPgns = allPgnsForMove gs mv
 
 allPgnsForMove :: GameState -> Move -> [PgnMove]
-allPgnsForMove = undefined
--- allPgnsForMove gs mv = expandMoveFormatted gs mv pieceField
---   where color = gs ^. gsColor
---         piece = movePiece gs mv
---         from = mv ^. moveFrom
---         pieceField = PieceField piece color from
---         newState = move gs piece mv
+allPgnsForMove gs mv = expandMove gs mv pieceField
+  where color = gs ^. gsColor
+        piece = movePiece gs mv
+        from = mv ^. moveFrom
+        pieceField = PieceField piece color from
+        newState = move gs piece mv
 
 allOtherPgns :: GameState -> Move -> [PgnMove]
-allOtherPgns = undefined
--- allOtherPgns gs mv = concat $ fmap (uncurry (flip (expandMoveFormatted gs))) allMovesWithPieceFields
---   where piece = movePiece gs mv
---         color = gs ^. gsColor
---         from = mv ^. moveFrom
---         pieceField = PieceField piece color from
---         allMoves = allNextLegalMoves gs
---         allMovesWithPieceFields = [(PieceField p color (m ^. from), m) | (p, m) <- allMoves, from /= m ^. moveFrom]
-
-
-pgnMoveMaybe :: Maybe GameState -> PgnMove -> Maybe (Piece, Move)
-pgnMoveMaybe Nothing _ = Nothing
-pgnMoveMaybe gs mp = pgnToMove (fromJust gs) mp
-
-type FullState = (Maybe GameState, Maybe (Piece, Move))
-
-
-pgnMoveFolder :: FullState -> PgnMove -> FullState
-pgnMoveFolder (Nothing, _) _ = (Nothing, Nothing)
-pgnMoveFolder (Just gs, _) pgnMove = (gs', mv)
-  where mv = pgnToMove gs pgnMove
-        gs' = fmap (uncurry (move gs)) mv
-
-pgnAsMovesFromGs :: GameState -> [PgnMove] -> [FullState]
-pgnAsMovesFromGs gs pgnMoves = scanl pgnMoveFolder (Just gs, Nothing) pgnMoves
-
-pgnAsMoves :: [PgnMove] -> [FullState]
-pgnAsMoves = pgnAsMovesFromGs startingGS
-
-foldGameEither :: Either String [Move] -> Maybe Move -> Either String [Move] 
-foldGameEither (Right mvs) Nothing = Left $ "Parsed moves until " ++ show (div (length mvs) 2) ++ show mvs
-foldGameEither (Right mvs) (Just mv) = Right $ mvs ++ [mv]
-foldGameEither (Left err) _ = Left err
-
--- | A `Game` consists of a starting game state and a list of moves.
--- Todo: This implementation allows creating a game with illegal moves.
--- I should aim to prevent this using a newtype.
-data Game = Game { 
-    startingGameState :: GameState
-  , gameMoves :: [Move] } deriving (Show)
+allOtherPgns gs mv = concat $ fmap (uncurry (flip (expandMove gs))) allMovesWithPieceFields
+  where piece = movePiece gs mv
+        color = gs ^. gsColor
+        from = mv ^. moveFrom
+        pieceField = PieceField piece color from
+        allMoves = allNextLegalMoves gs
+        allMovesWithPieceFields = [(PieceField p color (m ^. moveFrom), m) | (p, m) <- allMoves, from /= m ^. moveFrom]
 
 -- | A PgnGame consists of both a `Game` and a list of game tags. It represents
 -- the full information content of a PGN.
@@ -295,20 +259,9 @@ type ParsedGame = Either ParseError PgnGame
 readSingleGame :: Te.Text -> ParsedGame
 readSingleGame text = composeGame $ parseOnly parseGameComponents text
 
-pgnGameFromGs :: GameState -> [PgnMove] -> Either String Game
-pgnGameFromGs gs pgnMoves = fmap (Game gs) eitherMoves
-  where fs = pgnAsMovesFromGs gs pgnMoves
-        startingGS = fromJust $ fst $ head fs
-        movesWithPiece = tail $ fmap snd fs -- [Maybe (Piece, Move)]
-        moves = ((fmap . fmap) snd) movesWithPiece -- [Maybe Move]
-        eitherMoves = foldl foldGameEither (Right []) moves
-
-pgnGame :: [PgnMove] -> Either String Game
-pgnGame = pgnGameFromGs startingGS
-
 parseGame :: [PgnTag] -> [PgnMove] -> ParsedGame
 parseGame tags moves = gameParser game
-  where game = pgnGame moves
+  where game = gameFromStart pgnToMove moves
         gameParser (Left s) = Left $ PgnParseError s
         gameParser (Right g) = Right $ PgnGame tags g
   

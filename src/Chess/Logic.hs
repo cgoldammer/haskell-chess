@@ -456,12 +456,6 @@ castlingMoves gs
 possibleCastlingMoves :: GameState -> [Move]
 possibleCastlingMoves gs = catMaybes [makeMaybe c m | (m, c) <- zip (castlingMoves gs) (freeForCastling gs)]
 
--- hasCastlingRight :: Color -> CastleKingSide -> CastlingRights -> Bool
--- hasCastlingRight color castleKingSide castlingRights = getCastlingData castleKingSide $ getPlayerData color castlingRights
-
-noBadMove :: [Field] -> [Field] -> Bool
-noBadMove badFields fields = not $ any (\f -> f `elem` badFields) fields
-
 type OccupiedField = Field
 type ControlledByOpponentField = Field
 type ShouldNotBeOccupiedField = Field
@@ -469,6 +463,9 @@ type ShouldNotBeControlledField = Field
 
 getCastleOption :: ([OccupiedField], [ControlledByOpponentField]) -> ([ShouldNotBeOccupiedField], [ShouldNotBeControlledField]) -> Bool
 getCastleOption (occupied, controlled) (mustNotBeOccupied, mustNotBeControlled) = noBadMove occupied mustNotBeOccupied && noBadMove controlled mustNotBeControlled
+
+noBadMove :: [Field] -> [Field] -> Bool
+noBadMove badFields fields = not $ any (\f -> f `elem` badFields) fields
 
 freeField :: GameState -> Field -> Bool
 freeField gs f = not $ elem f $ fmap (view pfField) $ _gsPosition gs
@@ -493,16 +490,16 @@ fieldStep (Field c r) (x, y) = makeMaybe allLegit $ Field newCol newRow
             (newCol, newRow) = (fromJust (intColumn newX), fromJust (intRow newY))
             allLegit = isJust (intColumn newX) && isJust (intRow newY)
 
-range :: Bool -> [Int]
-range True = [1..7]
-range False = reverse [(-7)..(-1)]
+boardRange :: Bool -> [Int]
+boardRange True = [1..7]
+boardRange False = reverse [(-7)..(-1)]
 
-rangeT = range True
-rangeF = range False
+boardRangeT = boardRange True
+boardRangeF = boardRange False
 
-rookSteps = [zip rangeF (repeat 0), zip rangeT (repeat 0), zip (repeat 0) rangeF, zip (repeat 0) rangeT]
+rookSteps = [zip boardRangeF (repeat 0), zip boardRangeT (repeat 0), zip (repeat 0) boardRangeF, zip (repeat 0) boardRangeT]
 knightSteps = fmap (:[]) $ ([(sc, sr) | sc <- [-2, -1, 1, 2], sr <- [-2, -1, 1, 2], abs(sc) + abs(sr) == 3])
-bishopSteps = [zip rangeF rangeT, zip rangeT rangeT, zip rangeF rangeF, zip rangeT rangeF]
+bishopSteps = [zip boardRangeF boardRangeT, zip boardRangeT boardRangeT, zip boardRangeF boardRangeF, zip boardRangeT boardRangeF]
 queenSteps = rookSteps ++ bishopSteps
 kingSteps = fmap (:[]) $ [(sc, sr) | sc <- [-1..1], sr <- [-1..1], abs(sc) + abs(sr) > 0]
 
@@ -720,24 +717,6 @@ gsFromStringMoves mr gs pgnMoves = scanl (pgnMoveFolder mr) (Just gs, Nothing) p
 
 gsFromStringMovesStart :: MoveReader -> [String] -> [FullState]
 gsFromStringMovesStart mr mvs = gsFromStringMoves mr startingGS mvs
-
--- foldGame :: MoveReader -> Either String Game -> String -> Either Game
--- foldGame = undefined
--- foldGame = mr (Left err) _ = Left err
--- foldGame mr (Right game) mvString = 
---   where gs = tail $ gameStates game
---         mv = mr gs mvString -- Maybe (Piece, Move)
---         newGs = fmap (uncurry (move gs)) mv -- Maybe GameState
---         newData = undefined -- Maybe (GameState, Move)
---         movesSoFar = gameMoves game
---         gameMoveNumber = div (length movesSoFar) 2
---         error = "Parsed moves until " ++ show gameMoveNumber ++ show movesSoFar
-
-
--- foldGameEither :: Either String [Move] -> Maybe Move -> Either String [Move] 
--- foldGameEither (Right mvs) Nothing = Left $ "Parsed moves until " ++ show (div (length mvs) 2) ++ show mvs
--- foldGameEither (Right mvs) (Just mv) = Right $ mvs ++ [mv]
--- foldGameEither (Left err) _ = Left err
 
 -- | A `Game` consists of a starting game state and a list of moves.
 -- Todo: This implementation allows creating a game with illegal moves.

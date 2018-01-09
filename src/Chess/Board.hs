@@ -118,6 +118,12 @@ showPiece Pawn = "P"
 showColumn :: Column -> String
 showColumn c = [['A'..'H'] !! ((columnInt c) - 1)]
 
+allColumnNames :: [Char]
+allColumnNames = fmap (head . showColumn) allColumns
+
+allRowNames :: [Char]
+allRowNames = fmap (head . showRow) allRows
+
 showRow :: Row -> String
 showRow r = show $ rowInt r
 
