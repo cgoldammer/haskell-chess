@@ -26,8 +26,9 @@ import Chess.Pgn.External
 moveString = ["e4", "e5", "Ne2", "Nc6", "N2c3"]
 expected = ["E2E4", "E7E5", "G1E2", "B8C6", "E2C3"]
 
+startGameFen = "fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 pos = (view gsPosition) . fromJust . fenToGameState $ startGameFen
-startingPositionParseTest = 32 ~=? length pos
+startingPositionParseTest = sort (startingGS ^. gsPosition) ~=? sort pos
 
 fullMoves = [
       ("E2E4", Pawn, "e4")
@@ -36,7 +37,7 @@ fullMoves = [
 pgnEqualMoveTest :: String -> Piece -> String -> Test
 pgnEqualMoveTest moveString piece pgnString = pgnString ~=? pgnMoveParse
     where   pgnMoveParse = moveToPgn False False Standard mv pf
-            mv = fromJust $ stringToMove moveString
+            mv = snd $ fromJust $ stringToMove startingGS moveString -- Move
             from = mv ^. moveFrom
             pf = PieceField piece White from
 
@@ -46,14 +47,15 @@ moves = [
       ("e4", "E2E4")
     , ("Nf3", "G1F3")]
 
+
 pgnSameGameAsMove :: String -> String -> Test
 pgnSameGameAsMove pgnMove moveString = pgnMoveParse ~=? parsedMove 
-    where   parsedMove = stringToMove moveString
-            pgnMoveParse = fmap snd $ pgnToMove startingGS pgnMove
+    where   parsedMove = stringToMove startingGS moveString
+            pgnMoveParse = pgnToMove startingGS pgnMove
 
 pgnSameGameAsMoveTests = fmap (\(ms, pgnMove) -> pgnSameGameAsMove ms pgnMove) moves
 
-testCastlingParser = ((True, True), (True, True)) ~=? castlingRightsParser "KQkq"
+testCastlingParser = castleAll ~=? castlingRightsParser "KQkq"
 
 tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
@@ -139,10 +141,8 @@ testMovesNonParse s = Nothing ~=? parsed
 testMovesGood :: String -> Test
 testMovesGood s = isRight game ~? error
     where parsedPgnMoves = parseOnly parseGameMoves $ Te.pack s -- Either String [Move]
-          toEitherGame (Left s) = Left s
-          toEitherGame (Right m) = pgnGame m
-          game = toEitherGame parsedPgnMoves
-          error = "Read into game failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves ++ show game
+          game = fmap (gameFromStart pgnToMove) parsedPgnMoves
+          error = "Read into game failed:" ++ show game ++ " | Parsed to: " ++ show parsedPgnMoves ++ show game
 
 
 fullParse = [
@@ -156,22 +156,16 @@ testFullParse (s, num) = correct ~? error
           error = "Read into moves failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
           correct = length (fromJust parsedPgnMoves) == num
 
-firstMove = fromJust $ stringToMove "E2E4"
-secondMove = fromJust $ stringToMove "E7E5"
-
-stateAfterFirst = move startingGS (Pawn, firstMove)
-stateAfterSecond = move stateAfterFirst (Pawn, secondMove)
-
-firstToMove = fmap snd $ pgnToMove startingGS "e4"
-secondToMove = fmap snd $ pgnToMove stateAfterFirst "e5"
-
 toGameState :: Position -> GameState
 toGameState ps = defaultGameStateNoCastle ps White
 
 stringToGs :: [String] -> GameState
 stringToGs = toGameState . fromJust . stringToPosition
 
-newStateFromMoves gs mvs = fromJust $ tryMoves (Just gs) $ catMaybes $ fmap stringToMove mvs
+newStateFromMoves :: GameState -> [String] -> GameState
+newStateFromMoves gs mvs = last $ gameStates $ fromJust $ EitherC.rightToMaybe game
+  where game = gameFromString pgnToMove gs mvs
+
 gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
 
 testPromotionParse = TestCase $ assertBool error $ isJust mv
@@ -189,7 +183,7 @@ testExternalPgn = TestCase $ do
     let (_, gamePart) = Te.breakOn "1. " gamePgn
     let eitherMoves = parseOnly parseGameMoves gamePart
     isRight eitherMoves @? "Moves are not read: " ++ show gamePart ++ show eitherMoves
-    let eitherGameFromMoves = pgnGame $ fromJust $ EitherC.rightToMaybe eitherMoves
+    let eitherGameFromMoves = gameFromStart pgnToMove $ fromJust $ EitherC.rightToMaybe eitherMoves
     isRight eitherGameFromMoves @? "Moves are not a game: " ++ show gamePgn ++ show eitherGameFromMoves
     let eitherGame = readSingleGame gamePgn
     isRight eitherGame @? "Game is not read: " ++ show eitherGame
@@ -205,7 +199,7 @@ testExternalPgns = TestCase $ do
 
 testToPgn :: GameState -> [String] -> Test
 testToPgn gs pgnMoves = (show gs) ~: pgnMoves ~=? actual
-  where game = fromJust $ EitherC.rightToMaybe $ pgnGameFromGs gs pgnMoves
+  where game = fromJust $ EitherC.rightToMaybe $ gameFromString pgnToMove gs pgnMoves
         actual = gamePgnMoves game
 
 toPgnData :: [([String], [String])]
@@ -238,12 +232,10 @@ toPgnTestsCastles = createExpandedPgnTest toPgnDataCastles
 toPgnTestsPromotes = createExpandedPgnTest toPgnDataPromotes
 
 singleTests = [
-    startingPositionParseTest
-  , testCastlingParser
-  , testStringTag
-  , testMultipleTags
-  , "First move not parsed" ~: Just firstMove ~=? firstToMove
-  , "Second move not parsed" ~: Just secondMove ~=? secondToMove
+    "Starting position parses correctly" ~: startingPositionParseTest
+  , "Castling parses correctly" ~: testCastlingParser
+  , "String tags are read correctly" ~: testStringTag
+  , "Multiple tags are read correctly" ~: testMultipleTags
   ]
 
 promotionTests = [
@@ -268,7 +260,7 @@ pgnTests = [
     "Promotion tests: " ~: promotionTests
   , "External file tests: " ~: externalFileTests
   , "Assorted tests: " ~: singleTests
-  , "Pgn game parsing tests:" ~: pgnParseTests
+  -- , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
   , "Parsing move lists" ~: moveListTests
   , "Exporting PGN works correctly" ~: toPgnTests
@@ -278,3 +270,4 @@ pgnTests = [
 
 -- 86 tests total
 
+gm = "1.d4 Nf6 2.Bg5 c5 3.e3 Qb6 4.Nc3 e6 5.dxc5 Bxc5 6.Rb1 d5 7.Qf3 Nbd7 8.Bb5 Ne4 9.Nxe4 dxe4 10.Qe2 a6 11.Bxd7+ Bxd7 12.Qd2 f6 13.Bh4 Rd8 14.Ne2 Bb5 15.Qc1 Bb4+ 16.c3 Bxe2 17.Kxe2 Qb5+ 18.Ke1 Be7 19.Qc2 Rd3 20.Qb3 Qd7 21.Rd1 Kf7 22.Rxd3 Qxd3 23.Qd1 Qb5 24.Qe2 Qd5 25.b3 Rd8 26.f4 exf3 27.gxf3 Qc5 28.Kf2 Qxc3 29.Rd1 Rxd1 30.Qxd1 Qb2+ 31.Qe2 Qxe2+ 32.Kxe2 Bd6 33.h3 Be5 34.Be1 Ke7 35.Kd3 Kd7 36.a4 Kc6 37.Kc4 Bd6 38.Bh4 Bc5 39.e4 Be3 40.Be1 Bf4 41.Bf2 Bd6 42.Kd3 Be5 43.Kc4 g5 44.Kd3 Bf4 45.Bd4 f5 46.Ke2 h5 47.Kf1 Kd6 48.Ke2 Kc6 49.Ke1 Bd6 50.Ke2 Bc7 51.Be3 g4 52.fxg4 hxg4 53.hxg4 fxg4 54.Kf1 Bb6 55.Bh6 Bd4 56.Bf8 Be5 57.Kg2 Bd6 58.Bg7 Kc5 59.Bc3 b6 60.Kf2 Bf4 61.Kg2 b5 62.axb5 Kxb5 63.Kf2 Bc7 64.Bd2 Ba5 65.Bf4 Bb6+ 66.Kg3 Kb4 67.Be5 Kxb3 68.Kxg4 Kc4 69.Kg5 a5 70.Kg6 Bd4 71.Bc7 a4 72.Bd6 e5 73.Kf5 Kb3  0-1"

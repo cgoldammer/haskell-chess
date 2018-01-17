@@ -65,6 +65,8 @@ data Move = StandardMove { _moveFrom :: Field, _moveTo :: Field }
     deriving (Eq, Ord)
 makeLenses ''Move
 
+
+
 -- | A `MoveLocation` is a simplified version of a `Move` that denotes only the
 -- starting and destination fields.
 type MoveLocation = (Field, Field)
@@ -72,7 +74,7 @@ type MoveLocation = (Field, Field)
 -- | A `PieceField` describes a specific piece that is positioned on a specific field on the board.
 -- For instance, this could be a "Black bishop on a7", which includes the piece, the color
 -- and the field.
-data PieceField = PieceField {_pfPiece :: Piece, _pfColor :: Color, _pfField :: Field} deriving (Eq)
+data PieceField = PieceField {_pfPiece :: Piece, _pfColor :: Color, _pfField :: Field} deriving (Eq, Ord)
 makeLenses ''PieceField
 
 -- A chess position is simply a list of piece fields, and if we combine a chess position with other

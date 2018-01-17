@@ -61,6 +61,10 @@ pgnToPromotion pgn
   where end = last pgn
         secondToLast = head $ tail pgn
 
+isPromotionMove :: Move -> Bool
+isPromotionMove (PromotionMove _ _ _) = True
+isPromotionMove _ = False
+
 renameCastles :: PgnMove -> Color -> PgnMove
 renameCastles "O-O" White = "Kg1"
 renameCastles "O-O" Black = "Kg8"
@@ -68,15 +72,11 @@ renameCastles "O-O-O" White = "Kc1"
 renameCastles "O-O-O" Black = "Kc8"
 renameCastles pgnMove _ = pgnMove
 
-isPromotionMove :: Move -> Bool
-isPromotionMove (PromotionMove _ _ _) = True
-isPromotionMove _ = False
-
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
 possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
     where   
             allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
-            pgnCleaned = renameCastles (filter filterMoves pgn) color
+            pgnCleaned = renameCastles (filter filterMoves pgn) color -- PgnMove
             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
             relevantMoves = filter (if (isJust promotionPiece) then (isPromotionMove . snd) else (not . isPromotionMove. snd)) allMoves
             targetField = pgnToTargetField pgnWithoutPromotion
@@ -123,7 +123,6 @@ createPgnMoves gs ls = fmap (uncurry expander) ls
 -- expandMoveFormatted gs mv pf = fmap (addCastleFormat mv pf) $ expandMove gs mv pf
 
 expandMove :: GameState -> Move -> PieceField -> [PgnMove]
-expandMove _ cm@(CastlingMove _ _ _ _) _ = [show cm]
 expandMove gs mv pf = expanded 
     where   withColumn = moveHelper WithColumn mv pf
             withNeither = moveHelper Standard mv pf
@@ -158,6 +157,7 @@ promotionString (PromotionMove _ _ piece) = Just $ showPiece piece
 promotionString _ = Nothing
 
 moveToPgnHelper :: Bool -> Bool -> Move -> PieceField -> Bool -> Bool -> PgnMove
+moveToPgnHelper isCheck _ cm@(CastlingMove _ _ _ _) _ _ _ = concat $ catMaybes [Just (show cm), makeMaybe isCheck "+"]
 moveToPgnHelper isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
   where
     pieceString = pgnPieceChar $ pf ^. pfPiece

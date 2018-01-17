@@ -4,6 +4,8 @@ import Chess.Board
 import Chess.Logic
 import Chess.Helpers
 
+import Debug.Trace
+
 import Control.Applicative
 import Control.Lens
 import Data.Aeson
@@ -34,7 +36,7 @@ bestMoves fen moveTime number = do
   let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
   Tu.shell command empty
   print $ command
-  moves <- readResults number
+  moves <- readResults gs number
   let movesStandardized = if color == White then moves else fmap invertEval moves
   return movesStandardized
 
@@ -50,22 +52,16 @@ resultLines number = do
   let filt = \t -> not $ (Te.pack "upperbound") `Te.isInfixOf` t
   return $ filter filt lines
 
-readResults :: Int -> IO [StockfishMove]
-readResults number = do
+readResults :: GameState -> Int -> IO [StockfishMove]
+readResults gs number = do
   lines <- resultLines number
-  return $ readMoves lines number
+  return $ readMoves gs lines number
 
-readMoves :: [Te.Text] -> Int -> [StockfishMove]
-readMoves t number = reverse $ sortOn sortMove $ catMaybes $ fmap (EitherC.rightToMaybe . parser) $ lastLines
+readMoves :: GameState -> [Te.Text] -> Int -> [StockfishMove]
+readMoves gs t number = reverse $ sortOn sortMove $ catMaybes $ fmap (EitherC.rightToMaybe . parser) $ lastLines
   where   lastLines = Data.List.take number $ tail . tail $ reverse t 
-          parser = parseOnly stockfishLineParser
+          parser = parseOnly (stockfishLineParser gs)
 
--- -- r :: IO (Either String StockfishMove)
--- r :: IO (Te.Text)
--- r = do
---     results <- Tu.strict $ Tu.input "/home/cg/haskell-chess/scripts/results.txt"
---     let r = (reverse (Te.splitOn "\n" results)) !! 5
---     return r
 
 -- A sort order that ensures that mates are better than any non-mate
 invertEval :: StockfishMove -> StockfishMove
@@ -116,11 +112,11 @@ parseHash = do
   space
   return ()
 
-stockfishMoveRead :: String -> Move
-stockfishMoveRead = undefined
+stockfishMoveRead :: GameState -> String -> Move
+stockfishMoveRead gs mv = snd $ fromJust $ stringToMove gs $ fmap Ch.toUpper mv
 
-stockfishLineParser :: Parser StockfishMove
-stockfishLineParser = do
+stockfishLineParser :: GameState -> Parser StockfishMove
+stockfishLineParser gs = do
     string "info depth "
     many' digit
     string " seldepth "
@@ -143,48 +139,6 @@ stockfishLineParser = do
     string " pv "
     mvString <- many' (letter <|> digit)
     many' (letter <|> digit <|> space <|> char '\r')
-    let move = stockfishMoveRead mvString
+    let move = stockfishMoveRead gs mvString
     return $ StockfishMove move pvNumber eval
 
-stringToCastleMove "e1g1" = Just $ CastlingMove e1 g1 h1 f1
-stringToCastleMove "e8g8" = Just $ CastlingMove e8 g8 h8 f8
-stringToCastleMove "e1c1" = Just $ CastlingMove e1 c1 a1 d1
-stringToCastleMove "e8c8" = Just $ CastlingMove e8 c8 a8 d8
-stringToCastleMove _ = Nothing
-
-getMoversCastlingRights :: GameState -> (Bool, Bool)
-getMoversCastlingRights gs = if (color == White) then castleWhite else castleBlack
-  where (castleWhite, castleBlack) = gs ^. gsCastlingRights
-        color = gs ^. gsColor
-
-canCastle :: GameState -> Bool
-canCastle gs = castleKing || castleQueen
-  where (castleKing, castleQueen) = getMoversCastlingRights gs
-
-isCastleMove :: GameState -> String -> Bool
-isCastleMove gs mv = (mv `elem` ["e1g1", "e8g8", "e1c1", "e8c8"]) && canCastle gs
-
-isPromotionMove mv = length mv == 5
-
-stringToMove :: GameState -> String -> Maybe Move
-stringToMove gs mv
-  | isCastleMove gs mv = stringToCastleMove mv
-  | otherwise = nonCastleStringToMove gs mv
-
-parsePromotionPiece :: String -> Maybe Piece
-parsePromotionPiece p
-  | p `elem` ["QRBN"] = stringToPiece p
-  | otherwise = Nothing
-
-nonCastleStringToMove :: GameState -> String -> Maybe Move
-nonCastleStringToMove gs (c1 : c2 : c3 : c4 : rest) = move
-  where from = stringToField [c1, c2]
-        to = stringToField [c3, c4] 
-        promotionPiece = parsePromotionPiece rest
-        fromPiece = safeHead [pf ^. pfPiece | pf <- gs ^. gsPosition, Just (pf ^. pfField) == from]
-        epTarget = gs ^. gsEnPassantTarget
-        isEp = epTarget == to && fromPiece == Just Pawn
-        moveEnPassant = EnPassantMove <$> from <*> to <*> epTarget
-        movePromotion = PromotionMove <$> from <*> to <*> promotionPiece
-        moveStandard = StandardMove <$> from <*> to
-        move = if isEp then (if isJust promotionPiece then movePromotion else moveEnPassant) else moveStandard

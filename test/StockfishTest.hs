@@ -28,7 +28,8 @@ positionsMate = [
 -- Stockfish finds the unique mate in 2 in a position
 testFindMate (psList, mvExpected, numExpected) = TestCase $ do
   let fen = fullFen . fromJust . stringToPosition $ psList
-  let moveExpected = fromJust . stringToMove $ mvExpected
+  let gs = fromJust $ fenToGameState fen
+  let (_, moveExpected) = fromJust . (stringToMove gs) $ mvExpected
   mateMoves <- mateFinder fen
   length mateMoves > 0 @? "There are no mates, but there should be!"
   let (mv, num) = mateMoves !! 0
@@ -41,7 +42,8 @@ positionsBest = [
 
 testFindBest (psList, mvExpected, numExpectedLower, numExpectedHigher) = TestCase $ do
   let fen = fullFen . fromJust . stringToPosition $ psList
-  let moveExpected = fromJust . stringToMove $ mvExpected
+  let gs = fromJust $ fenToGameState fen
+  let (_, moveExpected) = fromJust . (stringToMove gs) $ mvExpected
   mvs <- bestMoves fen 1000 1
   let sfm@(StockfishMove mv _ eval) = mvs !! 0
   mv @?= moveExpected

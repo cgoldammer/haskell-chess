@@ -26,6 +26,8 @@ possibleBishopMoves = ["A1", "C3", "C1", "H8"]
 impossibleBishopMoves = ["B1", "B2"]
 allBishopMoves = concat $ pieceFields $ PieceField Bishop White bishopPosition
 
+
+
 intersect :: Ord a => [a] -> [a] -> S.Set a
 intersect l1 l2 = S.intersection (S.fromList l1) (S.fromList l2)
 
@@ -205,9 +207,9 @@ stringToGs = toGameStateNoCastle . fromJust . stringToPosition
 gsEp = stringToGs ["WKA1", "BKA8", "WPC2", "WPE2", "BPD4"]
 
 testEp mvs mvExpected error = TestCase $ assertEqual error (S.fromList movesExpected) intersection
-  where movesExpected = fmap snd $ catMaybes $ fmap (stringToMove gsEp) mvExpected -- [Move]
+  where movesExpected = catMaybes $ fmap (stringToMove newState) mvExpected -- [Move]
         intersection = intersect possible movesExpected
-        possible = fmap snd $ filter (\mp -> fst mp == Pawn) $ allNextLegalMoves newState
+        possible = filter (\mp -> fst mp == Pawn) $ allNextLegalMoves newState
         newState = newStateFromMoves gsEp mvs
 
 testsEp = [
@@ -263,6 +265,7 @@ legalMoveData = [
   , (["WKA1", "BKA8", "WQA2", "BRA7"], ["A2A3"], ["A1A2", "A2B2", "A2A8"])
   , (["WKA1", "BKA8", "WQB2", "BRA7"], ["B2A3"], ["B2B3", "B2A1"])
   , (["WKA1", "BKA8", "BRA7", "BBH8"], ["A1B1"], ["A1B2", "A1B2"])
+  , (["WKA1", "BKA8", "BBE3", "WPD2", "WPE2"], ["D2E3"], ["E2E3", "E2E4"])
   , (["WKA1", "BKA8", "BRA7", "WPA3", "BPB4"], ["A3A4"], ["A3B4"])]
 
 legalMoveTest gsString legalMoves = (S.fromList expected) ~=? actual

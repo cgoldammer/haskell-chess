@@ -61,7 +61,7 @@ nextRandomGameState = do
     whiteKingPosition <- evalRandIO $ randomFromFields White King whiteKingFields
     blackFortress <- evalRandIO $ randomFortress
     let position = basePosition ++ [whiteKingPosition] ++ blackFortress
-    let gs = GameState position White ((False, False), (False, False)) Nothing 0 1
+    let gs = GameState position White castleNone Nothing 0 1
     return gs
 
 blackFortressStrings = [
