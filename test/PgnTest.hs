@@ -180,7 +180,7 @@ tagFilter :: Te.Text -> Bool
 tagFilter t = not (Te.null t) && (Te.head t == '[')
 
 testExternalPgn = TestCase $ do
-    gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/manygames.pgn"
+    gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
     let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
     let eitherTags = parseOnly parseAllTags $ Te.unlines tagPart
     isRight eitherTags @? "Game tags not read: " ++ show tagPart
@@ -191,14 +191,6 @@ testExternalPgn = TestCase $ do
     isRight eitherGameFromMoves @? "Moves are not a game: " ++ show gamePgn ++ show eitherGameFromMoves
     let eitherGame = readSingleGame gamePgn
     isRight eitherGame @? "Game is not read: " ++ show eitherGame
-
-testExternalPgns fileName = TestCase $ do
-  let file = "test/files/" ++ fileName
-  let number = 10
-  games <- getGames file number
-  let (lefts, rights) = Data.List.span Data.Either.isLeft games
-  let total = length games
-  assertEqual ((show total) ++ " games. Not all games parsed" ++ show lefts) total (length rights)
 
 testExternalPgnsFile fileName = TestCase $ do
   let file = "test/files/" ++ fileName
@@ -260,9 +252,7 @@ promotionTests = [
 
 externalFileTests = [
     "Cannot read file with one PGN: " ~: testExternalPgn
-  , "Cannot read file with many PGNs: " ~: testExternalPgns "many.pgn"
-  , "Cannot read file with rapid games: " ~: testExternalPgns "rapid.pgn"
-  , "Cannot read file with rapid games: " ~: testExternalPgnsFile "rapid.pgn"
+  , "Cannot read file with many PGNs: " ~: testExternalPgnsFile "many.pgn"
   ]
 
 moveListTests = [

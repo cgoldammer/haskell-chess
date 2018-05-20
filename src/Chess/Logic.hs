@@ -138,28 +138,29 @@ tryMoves (Just gs) (mv : rest) = if isLegalMove then nextState else Nothing
 type IsTaking = Bool
 type IsPawnMove = Bool
 
+-- |The full move increases by one after black has made a move.
 updateFullMove :: Color -> Int -> Int
 updateFullMove White n = n
 updateFullMove Black n = n + 1
 
+-- |The half move updates whenever the gamestate changes irrevokably. This is
+-- true for all non-standard moves. For standard moves, this is true if it's a pawn
+-- move or a piece is taken.
 updateHalfMove :: GameState -> Move -> Int -> Int
 updateHalfMove _ (EnPassantMove _ _ _) _ = 1
 updateHalfMove _ (PromotionMove _ _ _) _ = 1
 updateHalfMove _ (CastlingMove _ _ _ _) _ = 1
-updateHalfMove gs mv@(StandardMove from to) n = if (isTakingMove || isPawnMove) then 1 else updateFullMove color n
+updateHalfMove gs mv@(StandardMove from to) n = if structureChanged then 1 else updateFullMove color n
   where isTakingMove = isTaking gs to
         isPawnMove = movePiece gs mv == Pawn
         color = gs ^. gsColor
+        structureChanged = isTakingMove || isPawnMove
 
-
-
-getPositionChange :: GameState -> Piece -> Move -> ([Field], [PieceField])
-getPositionChange gs piece move = (removePf ++ removeTaken, addPf)
-  where isTakingMove = isTaking gs toField
-        toField = move ^. moveTo
-        (removePf, addPf) = getPositionChangeHelper gs piece move
-        removeTaken = if isTakingMove then [toField] else []
-
+-- |The main logic required to update a position. Give a gamestate, and a piece
+-- making a move, this returns a tuple containing a list of fields that are now
+-- vacated and a list of PieceFields with changed piece positions.
+-- This does not involve removing taken pieces, that's done through 
+-- `getPositionChange`.
 getPositionChangeHelper :: GameState -> Piece -> Move -> ([Field], [PieceField])
 getPositionChangeHelper gs piece (StandardMove from to) = (removePf, addPf)
   where position = gs ^. gsPosition
@@ -182,19 +183,37 @@ getPositionChangeHelper gs Pawn (EnPassantMove from to pawnCapturedField) = (rem
         removePf = [from, pawnCapturedField]
         addPf = [PieceField Pawn color to]
 
-shiftRowIntoOwnDirection :: Field -> Color -> Int -> Maybe Field
-shiftRowIntoOwnDirection (Field column row) color number = Field <$> Just column <*> takenRow
+-- |The interface to update a position. This has almost the same as
+-- getPositionChangeHelper, except that pieces that are taken are removed.
+getPositionChange :: GameState -> Piece -> Move -> ([Field], [PieceField])
+getPositionChange gs piece move = (removePf ++ removeTaken, addPf)
+  where toField = move ^. moveTo
+        isTakingMove = isTaking gs $ toField
+        (removePf, addPf) = getPositionChangeHelper gs piece move
+        removeTaken = if isTakingMove then [toField] else []
+
+-- |A helper function to shift a field into a direction that depends on the player's color.
+shiftFieldIntoOwnDirection :: Field -> Color -> Int -> Maybe Field
+shiftFieldIntoOwnDirection (Field column row) color number = Field <$> Just column <*> takenRow
   where rowNumber = rowInt row
         rowChange = if (color == White) then (-number) else (number)
         takenRow = intRow $ rowNumber + rowChange
 
+-- |Remove a certain field from the position
 removeFieldFromPosition :: Position -> Field -> Position
 removeFieldFromPosition position field = [pf | pf <- position, pf ^. pfField /= field]
 
+-- |Update a position given the fields of pieces that are to be removed and the piecefields
+-- to add.
 updatePosition :: Position -> [Field] -> [PieceField] -> Position
 updatePosition position remove add = (foldl removeFieldFromPosition position remove) ++ add
 
-
+-- |The main logic to update a `GameState` based on a move made by a piece.
+-- Logically, it's not necessary to include the piece (since it can be inferred from the move)
+-- but the piece is crucial for updating the position, and would have to be looked up, so passing
+-- it along can speed up performance.
+-- Conceptually, the function updates all components of the `GameState` using helper functions
+-- which are usually called `update...`, e.g. `updateHalfMove`.
 move :: GameState -> Piece -> Move -> GameState
 move gs piece mv = GameState newPosition newColor newCastlingRights newEnPassant newHalfMove newFullMove
   where   oldColor = gs ^. gsColor
@@ -206,6 +225,12 @@ move gs piece mv = GameState newPosition newColor newCastlingRights newEnPassant
           newCastlingRights = updateCastlingRights mv (gs ^. gsCastlingRights)
           newEnPassant = updateEnPassant gs mv
 
+-- |Based on a `GameState`, a piece and a move, return a new `GameState`.
+-- Conceptually, this is the central function for this library, because it encapsulates
+-- the full logic of making moves and updating a `GameState`.
+-- Even though this is the most parsimonious signature, for performance reasons 
+-- the function is defined in terms of `move`, which also takes the piece 
+-- corresponding to the move.
 move' :: GameState -> Move -> GameState
 move' gs mv = move gs (movePiece gs mv) mv
 
@@ -223,14 +248,10 @@ updatePositionMove gs piece mv = GameState newPosition newColor oldCastlingRight
           oldEp = gs ^. gsEnPassantTarget
 
 
--- updatePosition :: Position -> Field -> Field -> Position
--- updatePosition ps field newField = newPf : [p | p <- ps, p /= pf]
---     where pf = head $ filter (\p -> p ^. pfField == field) ps
---           newPf = PieceField piece color newField
---           piece = pf ^. pfPiece
---           color = pf ^. pfColor
-
-
+-- | Obtaining an en passant target given a move. The logic is that
+-- A new en-passant target exists if and only if a pawn moved two squares.
+-- In that case, the target is one row before where the pawn ends up, e.g.
+-- After White plays e2-e4, the en-passant target is on e3.
 updateEnPassant :: GameState -> Move -> Maybe Field
 updateEnPassant gs mv@(StandardMove from@(Field fromC fromR) to@(Field toC toR))
   | pawnMovedTwo = beforeField 
@@ -247,30 +268,25 @@ nextRow :: Row -> Color -> Maybe Row
 nextRow r White = intRow $ (rowInt r) + 1
 nextRow r Black = intRow $ (rowInt r) - 1
 
+-- |Update castling rights given the existing rights and flags for whether the current 
+-- move left the state the same. E.g. if I castle myself, then the flag would be False.
+updatePlayerCastlingData :: CastlingData Bool -> CastlingData Bool -> CastlingData Bool
+updatePlayerCastlingData (CastlingData kBefore qBefore) (CastlingData kNow qNow) = CastlingData (kBefore && kNow) (qBefore && qNow)
+
 updateCastlingRights :: Move -> CastlingRights -> CastlingRights
 updateCastlingRights (CastlingMove from to rookFrom rookTo) castlingRights = newRights
   where whiteK = not (from == e1 && rookFrom == h1)
         whiteQ = not (from == e1 && rookFrom == a1)
         blackK = not (from == e8 && rookFrom == h8)
         blackQ = not (from == e8 && rookFrom == a8)
-        PlayerData (CastlingData whiteKBefore whiteQBefore) (CastlingData blackKBefore blackQBefore) = castlingRights
-        newRightsWhite = CastlingData (whiteKBefore && whiteK) (whiteQBefore && whiteQ)
-        newRightsBlack = CastlingData (blackKBefore && blackK) (blackQBefore && blackQ)
-        newRights = PlayerData newRightsWhite newRightsBlack
+        PlayerData castlingWhite castlingBlack = castlingRights
+        newDataWhite = updatePlayerCastlingData castlingWhite (CastlingData whiteK whiteQ)
+        newDataBlack = updatePlayerCastlingData castlingBlack (CastlingData blackK blackQ)
+        newRights = PlayerData newDataWhite newDataBlack
 updateCastlingRights _ castlingRights = castlingRights
   
 pieceFieldForMove :: GameState -> Move -> PieceField
 pieceFieldForMove gs mv = head [pf | pf <- gs ^. gsPosition, mv ^. moveFrom == pf ^. pfField]
-
-allNextStates :: GameState -> [GameState]
-allNextStates gs = fmap (uncurry (move gs)) (allNextLegalMoves gs)
-
-isMate :: GameState -> Bool
-isMate gs = noNextMoves && inCheck gs
-    where noNextMoves = length (allNextLegalMoves gs) == 0
-
-allOpponentMoves :: GameState -> [(Piece, Move)]
-allOpponentMoves = allPhysicalMoves . invertGameStateColor
 
 invertGameStateColor :: GameState -> GameState
 invertGameStateColor gs = over gsColor invertColor gs
@@ -280,6 +296,17 @@ allStandardMoves gs = concat $ fmap (allStandardPhysicalMoves gs) (ownPieceField
 
 allNextLegalMoves :: GameState -> [(Piece, Move)]
 allNextLegalMoves gs = filterOutInCheck gs $ allPhysicalMoves gs
+
+allNextStates :: GameState -> [GameState]
+allNextStates gs = fmap (uncurry (move gs)) (allNextLegalMoves gs)
+
+isMate :: GameState -> Bool
+isMate gs = noNextMoves && inCheck gs
+  where noNextMoves = length (allNextLegalMoves gs) == 0
+
+allOpponentMoves :: GameState -> [(Piece, Move)]
+allOpponentMoves = allPhysicalMoves . invertGameStateColor
+
     
 inCheck :: GameState -> Bool
 inCheck gs@(GameState ps color cr ept hm fm) = (ownKingField gs) `elem` opponentFields
@@ -423,7 +450,7 @@ allStandardPhysicalMoves gs pf@(PieceField piece _ field) = if pawnPromotes then
 moveFromFields :: GameState -> Piece -> (Field, Field) -> Move
 moveFromFields gs piece (from, to) = if isEp then EnPassantMove from to captureField else StandardMove from to
   where isEp = isEnPassant (_gsEnPassantTarget gs) piece (from, to)
-        captureField = fromJust $ shiftRowIntoOwnDirection to (gs ^. gsColor) (1)
+        captureField = fromJust $ shiftFieldIntoOwnDirection to (gs ^. gsColor) (1)
 
         
 addPromotionMoves :: MoveLocation -> [Move]
@@ -738,7 +765,7 @@ nonCastleStringToMove gs (c1 : c2 : c3 : c4 : rest) = (,) <$> fromPiece <*> move
         fromPiece = safeHead [pf ^. pfPiece | pf <- gs ^. gsPosition, Just (pf ^. pfField) == from]
         epTarget = gs ^. gsEnPassantTarget
         isEp = epTarget == to && fromPiece == Just Pawn
-        pawnCapturedField = join $ fmap (\field -> shiftRowIntoOwnDirection field color 1) epTarget
+        pawnCapturedField = join $ fmap (\field -> shiftFieldIntoOwnDirection field color 1) epTarget
         moveEnPassant = EnPassantMove <$> from <*> to <*> pawnCapturedField
         movePromotion = PromotionMove <$> from <*> to <*> promotionPiece
         moveStandard = StandardMove <$> from <*> to
