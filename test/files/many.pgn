@@ -1,0 +1,196 @@
+[Event "CSR-ch"]
+[Site "Ostrava"]
+[Date "1960.??.??"]
+[Round "8"]
+[White "Opocensky, Karel"]
+[Black "Ujtelky, Maximilian"]
+[Result "1-0"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "A45"]
+
+1.d4 Nf6 2.Bg5 g6 3.Bxf6 exf6 4.e3 Bg7 5.g3 d5 6.Bg2 c6 7.Ne2 O-O 8.Nd2 Nd7
+9.c4 dxc4 10.Nxc4 Nb6 11.Na5 Nd5 12.Qd2 f5 13.b4 Re8 14.Rc1 a6 15.a3 Re7
+16.Rxc6 Bh6 17.Rc5 Nxe3 18.fxe3 Bxe3 19.Qd3 f4 20.gxf4 Bg4 21.Re5 Rxe5 22.fxe5 Bh6
+23.Qe4 Bf5 24.Qxb7 Qh4+ 25.Ng3 Rc8 26.Nc6 Rxc6 27.Qxc6 Qxd4 28.Qa8+ Kg7 29.Nxf5+ gxf5
+30.Qf3 Qd2+ 31.Kf1 Be3 32.Qg3+ Kf8 33.Bf3 f4 34.Qe1 Qd3+ 35.Qe2 Qb1+ 36.Kg2 Qg6+
+37.Kh3  1-0
+
+[Event "CSR-ch"]
+[Site "Ostrava"]
+[Date "1960.??.??"]
+[Round "11"]
+[White "Opocensky, Karel"]
+[Black "Jezek, Stanislav"]
+[Result "1/2-1/2"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "A45"]
+
+1.d4 Nf6 2.Bg5 g6 3.Bxf6 exf6 4.e3 Bg7 5.c4 f5 6.Nc3 d6 7.g3 Nd7 8.Bg2 c6
+9.Nge2 Nf6 10.b4 O-O 11.b5 Bd7 12.a4 Qa5 13.O-O Rfe8 14.Qb3 Rac8 15.Rab1 Be6
+16.bxc6 bxc6 17.d5 cxd5 18.cxd5 Bd7 19.Qb4 Qxb4 20.Rxb4 Rc5 21.Rfb1 h6 22.Rb8 Kh7
+23.R8b7 Rec8 24.Nb5 Bxb5 25.axb5 R8c7 26.Rxc7 Rxc7 27.Nd4 Rb7 28.Rc1 Ne8
+29.Nc6 Bf6 30.Bf1 Bb2 31.Rc2 Ba3 32.Na5 Rc7 33.Ra2 Bc5 34.Nc6 Rb7 35.Na5  1/2-1/2
+
+[Event "CSR-ch"]
+[Site "Jablonec"]
+[Date "1962.??.??"]
+[Round "17"]
+[White "Opocensky, Karel"]
+[Black "Trapl, Jindrich"]
+[Result "0-1"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "D00"]
+
+1.d4 Nf6 2.Bg5 d5 3.Nd2 Bf5 4.e3 Nbd7 5.Bd3 Bg6 6.Ngf3 c5 7.Ne5 Qb6 8.Ndf3 Nxe5
+9.Nxe5 e6 10.O-O c4 11.Bxg6 hxg6 12.c3 Qa6 13.b3 Ne4 14.bxc4 Nxg5 15.cxd5 Bd6
+16.f4 Bxe5 17.dxe5 Ne4 18.dxe6 Qxe6 19.Qa4+ Qc6 20.Qa3  0-1
+
+[Event "Mar del Plata"]
+[Site "Mar del Plata"]
+[Date "1962.??.??"]
+[Round "10"]
+[White "Rossetto, Hector"]
+[Black "Bielicki, Carlos"]
+[Result "1/2-1/2"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "D36"]
+
+1.d4 Nf6 2.Bg5 d5 3.Nf3 Nbd7 4.c4 e6 5.cxd5 exd5 6.e3 Be7 7.Nc3 c6 8.Qc2 Nh5
+9.Bxe7 Qxe7 10.Be2 O-O 11.O-O-O Nhf6 12.h3 Re8 13.g4 Ne4 14.Bd3 Ndf6 15.Kb1 Nxc3+
+16.Qxc3 Ne4 17.Qc2 Kh8 18.Ne5 f6 19.Nf3 Rf8 20.Rhg1 Bd7 21.h4 Rac8 22.Bxe4 dxe4
+23.Nd2 Rfe8 24.g5 Be6 25.gxf6 gxf6 26.Rc1 Bd5 27.b3 Rg8 28.Qc5 Qxc5 29.dxc5 Rg6
+30.Rxg6 hxg6 31.Nc4 Bxc4 32.Rxc4 Re8 33.Rd4 Re7 34.Kc2 Kg7 35.Rd6 f5 36.Kc3 Kh6
+37.Kd4 Kg7 38.b4 Kf7 39.a4 a6 40.h5 gxh5 41.Rh6 Kg7 42.Rxh5 Kf6 43.Rh8 Rd7+
+44.Kc4 Rd2  1/2-1/2
+
+[Event "Mar del Plata"]
+[Site "Mar del Plata"]
+[Date "1962.??.??"]
+[Round "12"]
+[White "Rossetto, Hector"]
+[Black "Pachman, Ludek"]
+[Result "0-1"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "D00"]
+
+1.d4 Nf6 2.Bg5 d5 3.e3 c5 4.c3 Ne4 5.Bh4 cxd4 6.exd4 Nc6 7.f3 Nd6 8.Qb3 Nf5
+9.Bf2 g6 10.g4 Ng7 11.Bg2 h5 12.Ne2 e6 13.Nd2 Bd6 14.O-O-O Na5 15.Qc2 b5
+16.h3 Bd7 17.Bg3 Bxg3 18.Nxg3 b4 19.Ne2 Bb5 20.Rhe1 O-O 21.Kb1 Rc8 22.Rc1 Qd6
+23.Ka1 Rc7 24.Qd1 Rfc8 25.cxb4 Qxb4 26.Rxc7 Rxc7 27.Nb3 Ba4 28.Nec1 Rxc1+
+29.Qxc1 Bxb3 30.Qc8+ Kh7 31.Qc3 Qa4 32.a3 Nc6 33.Bf1 Nxd4 34.Bd3 Bc2 35.Rg1 e5
+36.Bxc2 Nxc2+ 37.Kb1 Qd4 38.Qxd4 Nxd4 39.Rd1 Nge6 40.b4 hxg4 41.hxg4 Nxf3
+42.Rxd5 e4 43.Rd7 Kg7 44.Kc2 Ned4+ 45.Kc3 e3  0-1
+
+[Event "Varna olm"]
+[Site "Varna"]
+[Date "1962.??.??"]
+[Round "7"]
+[White "Boisan"]
+[Black "Stoltz, Goesta"]
+[Result "0-1"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "A45"]
+
+1.d4 Nf6 2.Bg5 c5 3.Bxf6 gxf6 4.dxc5 e5 5.e3 Bxc5 6.Nd2 d5 7.Nb3 Nc6 8.Nxc5 Qa5+
+9.Qd2 Qxc5 10.O-O-O Be6 11.Kb1 O-O-O 12.Ne2 d4 13.exd4 Qb6 14.Qc3 Kb8 15.Rd2 Rhg8
+16.b3 exd4 17.Qf3 Qa5 18.Qf4+ Ka8 19.Rd1 Nb4 20.Nc1 Bf5 21.Bd3 Bxd3 22.cxd3 Nd5
+23.Qd2 Qxd2 24.Rxd2 Rxg2 25.Kb2 Re8 26.a3 Nf4 27.h4 h5 28.b4 Re5 29.Kc2 Ne6
+30.Kd1 a5 31.Re2 axb4 32.axb4 Ka7 33.Rxe5 fxe5 34.Ke2 Nf4+ 35.Kf3 Rg6 36.Ke4 Rc6
+37.Nb3 Ng6 38.Ra1+ Kb6 39.Nc5 Kb5 40.Nxb7 Rf6 41.Kd5 Kxb4 42.Rc1 Rf4 43.Nd6 Rxh4
+44.Nxf7 Nf4+ 45.Kd6 Nxd3 46.Rb1+ Kc3 47.Nxe5 Nxe5 48.Kxe5 d3 49.Rb8 d2 50.Rd8 Ra4
+51.f4 h4 52.f5 h3 53.f6 Ra1 54.f7 Re1+  0-1
+
+[Event "CSR-ch"]
+[Site "Brno"]
+[Date "1964.??.??"]
+[Round "3"]
+[White "Trapl, Jindrich"]
+[Black "Nowak, Erwin"]
+[Result "1/2-1/2"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "D00"]
+
+1.d4 Nf6 2.Bg5 d5 3.Nd2 Bf5 4.e3 Nbd7 5.Bd3 Bg6 6.Ngf3 e6 7.Ne5 Be7 8.f4 Ng8
+9.Bxe7 Nxe7 10.O-O Bxd3 11.cxd3 f6 12.Nef3 O-O 13.Nb3 b6 14.Rc1 Rc8 15.Rf2 c6
+16.Kh1 Qc7 17.g4 Qd6 18.Nh4 c5 19.dxc5 Nxc5 20.Nf3 Nxb3 21.Rxc8 Rxc8 22.Qxb3 e5
+23.f5 h5 24.h3 e4 25.Ng1 hxg4 26.dxe4 gxh3 27.Rf4 Rc1 28.Qa4 Kf7 29.Qd4 Rc4
+30.Qd1 Qc7 31.Qh5+ Kf8 32.Nxh3 Rxe4 33.Rxe4 dxe4 34.Nf4 Qc1+ 35.Kh2 Qd2+
+36.Kh1 Qe1+ 37.Kg2 Qxe3 38.Ne6+ Kg8  1/2-1/2
+
+[Event "Capablanca mem"]
+[Site "Havana"]
+[Date "1964.??.??"]
+[Round "9"]
+[White "Letelier, Rene"]
+[Black "Santa Cruz, Hugo"]
+[Result "1-0"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "D01"]
+
+1.d4 d5 2.Bg5 Nf6 3.Nc3 Ne4 4.Nxe4 dxe4 5.e3 c6 6.Bf4 Qb6 7.f3 Qb4+ 8.Kf2 Bf5
+9.fxe4 Bxe4 10.Bd3 Bxd3 11.Qxd3 Qxb2 12.Ne2 Qb5 13.Qxb5 cxb5 14.Nc3 b4 15.Nb5 Na6
+16.a3 bxa3 17.c4 Kd7 18.Rhb1 e6 19.Nxa3 Bxa3 20.Rxb7+ Kc6 21.Rxf7 g5 22.Rxa3 Kb6
+23.Bd6 Nb8 24.Bc5+ Kc6 25.Ra5 a6 26.e4 Nd7 27.d5+ exd5 28.cxd5+ Kc7 29.e5  1-0
+
+[Event "Wch U26"]
+[Site "Krakow"]
+[Date "1964.??.??"]
+[Round "?"]
+[White "Hort, Vlastimil"]
+[Black "Liptay, Laszlo"]
+[Result "1/2-1/2"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "A45"]
+
+1.d4 Nf6 2.Bg5 g6 3.Bxf6 exf6 4.g3 Bg7 5.Bg2 O-O 6.e3 d5 7.Ne2 c6 8.Nd2 Nd7
+9.O-O f5 10.c4 dxc4 11.Nxc4 c5 12.Rc1 cxd4 13.exd4 Nf6 14.Nc3 f4 15.Ne5 fxg3
+16.hxg3 h5 17.Re1 Ng4 18.Nd5 Nxe5 19.dxe5 Be6 20.Qd2 h4 21.gxh4 Qxh4 22.Re4 Qd8
+23.Re2 Qh4 24.Re4 Qd8 25.Re2 Qh4 26.Re4 Qd8  1/2-1/2
+
+[Event "Rubinstein mem"]
+[Site "Polanica Zdroj"]
+[Date "1964.??.??"]
+[Round "5"]
+[White "Hort, Vlastimil"]
+[Black "Schmidt, Wlodzimierz"]
+[Result "1-0"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "A45"]
+
+1.d4 Nf6 2.Bg5 c5 3.Bxf6 gxf6 4.dxc5 e6 5.Nd2 Qa5 6.e3 Qxc5 7.Ngf3 Be7 8.Bd3 b6
+9.c3 Bb7 10.Qa4 f5 11.h3 Nc6 12.O-O-O Qd6 13.Ba6 O-O-O 14.g4 fxg4 15.hxg4 Bxa6
+16.Qxa6+ Kb8 17.Rh5 f6 18.Nb3 Qc7 19.Kb1 Rhg8 20.Rxh7 Rxg4 21.Nfd4 e5 22.Nf5 Bf8
+23.Qd3 Rg2 24.f3 Rf2 25.e4 Qb7 26.Rd2 Rxd2 27.Nxd2 Na5 28.Nb3 Nxb3 29.axb3 Qc6
+30.Qd5 Bc5 31.b4 Qxd5 32.exd5 Bg1 33.Rf7 Rg8 34.Rxd7 Rg5 35.Ne7 Rg3 36.d6 Rxf3
+37.Nc6+  1-0
+
+[Event "Tel Aviv olm fin-C"]
+[Site "Tel Aviv"]
+[Date "1964.??.??"]
+[Round "4"]
+[White "Tapaszto, Laszlo"]
+[Black "Suer, Nevzat"]
+[Result "1-0"]
+[WhiteElo ""]
+[BlackElo ""]
+[ECO "E70"]
+
+1.d4 Nf6 2.Bg5 c5 3.d5 d6 4.c4 g6 5.Nc3 Bg7 6.e4 O-O 7.Qd2 b5 8.cxb5 a6 9.Bh6 Bxh6
+10.Qxh6 axb5 11.Bxb5 Qa5 12.Bd3 c4 13.Bc2 Qb6 14.Qd2 Qxb2 15.Rb1 Qa3 16.Nge2 Nbd7
+17.O-O Ne5 18.h3 Ba6 19.Nd4 Rab8 20.f4 Qc5 21.Kh2 Rxb1 22.Bxb1 Nd3 23.Nc6 Re8
+24.f5 Kg7 25.fxg6 hxg6 26.Qg5 Nf2 27.Qf4 Qa3 28.Ne2 Nd3 29.Bxd3 cxd3 30.Nxe7 Qb2
+31.Nf5+ gxf5 32.Qg5+ Kf8 33.Ng3 d2 34.Nxf5 Ng8 35.Rd1 Qf6 36.Qf4 Re5 37.Rxd2 Ne7
+38.g4 Nxf5 39.gxf5 Bc8 40.Rg2 Ke7 41.Rg8 Bxf5 42.exf5 Rxf5 43.Qe3+ Qe5+ 44.Rg3 Qxe3
+45.Rxe3+ Kf6 46.Kg3 Rxd5 47.Rf3+ Kg6 48.a4 Ra5 49.Rf4 f5 50.Rd4 Ra6 51.Kf4 Kf6
+52.h4 Ke6 53.h5 Ra8 54.h6 Rh8 55.Kg5 Ke5 56.Rd1 Rg8+ 57.Kh5 Rg2 58.a5 Rh2+
+59.Kg6 Rg2+ 60.Kf7 Rh2 61.Re1+ Kd5 62.Kg7 f4 63.h7  1-0
