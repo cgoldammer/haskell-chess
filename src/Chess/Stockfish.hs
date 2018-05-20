@@ -35,7 +35,6 @@ bestMoves fen moveTime number = do
   let color = gs ^. gsColor
   let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
   Tu.shell command empty
-  print $ command
   moves <- readResults gs number
   let movesStandardized = if color == White then moves else fmap invertEval moves
   return movesStandardized

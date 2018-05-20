@@ -179,19 +179,6 @@ testPromotionParse = TestCase $ assertBool error $ isJust mv
 tagFilter :: Te.Text -> Bool
 tagFilter t = not (Te.null t) && (Te.head t == '[')
 
-testExternalPgn = TestCase $ do
-    gamePgn :: Te.Text <- Tu.strict $ Tu.input "test/files/many.pgn"
-    let tagPart = (filter tagFilter $ Te.lines gamePgn) :: [Te.Text]
-    let eitherTags = parseOnly parseAllTags $ Te.unlines tagPart
-    isRight eitherTags @? "Game tags not read: " ++ show tagPart
-    let (_, gamePart) = Te.breakOn "1. " gamePgn
-    let eitherMoves = parseOnly parseGameMoves gamePart
-    isRight eitherMoves @? "Moves are not read: " ++ show gamePart ++ show eitherMoves
-    let eitherGameFromMoves = gameFromStart pgnToMove $ fromJust $ EitherC.rightToMaybe eitherMoves
-    isRight eitherGameFromMoves @? "Moves are not a game: " ++ show gamePgn ++ show eitherGameFromMoves
-    let eitherGame = readSingleGame gamePgn
-    isRight eitherGame @? "Game is not read: " ++ show eitherGame
-
 testExternalPgnsFile fileName = TestCase $ do
   let file = "test/files/" ++ fileName
   text <- readGameText file 
@@ -251,8 +238,7 @@ promotionTests = [
   , "Can parse promotion move" ~: testPromotionParse]
 
 externalFileTests = [
-    "Cannot read file with one PGN: " ~: testExternalPgn
-  , "Cannot read file with many PGNs: " ~: testExternalPgnsFile "many.pgn"
+  "Cannot read file with many PGNs: " ~: testExternalPgnsFile "many.pgn"
   ]
 
 moveListTests = [
