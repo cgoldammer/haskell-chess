@@ -15,16 +15,17 @@ module Chess.Pgn.Logic (
   , ParsedGame 
   , tagParse
   , eventParse, siteParse, fullTagParse, parseAllTags
-  , parseGameMoves, moveParser, bothMoveParser, sidelineParser
+  , parseGameMoves, parseGameComponents, moveParser, bothMoveParser, sidelineParser
   , readSingleGame
   , gameSummaries
   , gamePgnMoves, gamePgnFull
   , createPgnMoves, expandMove
-  , gameText
+  , gameText, readGameText
   , unsafeMoves
+  , splitIntoGames
   , BlunderThreshold
   , GameEvaluation(..)
-  , getGames
+  , getGames, getGamesFromText
   , allPgnsForMove, moveAsPgn, allOtherPgns
   , moveToPgn) where
 
@@ -129,10 +130,13 @@ expandMove gs mv pf = expanded
             withRow = moveHelper WithRow mv pf
             withBoth = moveHelper WithBoth mv pf
             piece = pf ^. pfPiece
-            isCheck = inCheck $ move gs piece mv
+            newState = move gs piece mv
+            isCheck = inCheck newState
+            isMated = isCheck && isMate newState
+            isCheckNotMate = isCheck && not isMated
             isEp = Just (mv ^. moveTo) == (gs ^. gsEnPassantTarget) && piece == Pawn
             isTake = (isTaking gs (mv ^. moveTo)) || isEp
-            moveHelper = moveToPgn isCheck isTake
+            moveHelper = moveToPgn isMated isCheckNotMate isTake
             expandedFull = [withNeither, withColumn, withRow, withBoth]
             expanded = case () of _
                                     | (piece == Pawn) && isTake -> [withColumn]
@@ -147,18 +151,18 @@ convertPgnTypeToBools WithColumn = (True, False)
 convertPgnTypeToBools WithRow = (False, True)
 convertPgnTypeToBools WithBoth = (True, True)
 
-moveToPgn :: Bool -> Bool -> PgnType -> Move -> PieceField -> PgnMove
-moveToPgn isCheck isTake pgnType mv pf = uncurry helper $ bools
-  where helper = moveToPgnHelper isCheck isTake mv pf 
+moveToPgn :: Bool -> Bool -> Bool -> PgnType -> Move -> PieceField -> PgnMove
+moveToPgn isMate isCheck isTake pgnType mv pf = uncurry helper $ bools
+  where helper = moveToPgnHelper isMate isCheck isTake mv pf 
         bools = convertPgnTypeToBools pgnType
 
 promotionString :: Move -> Maybe String
 promotionString (PromotionMove _ _ piece) = Just $ showPiece piece
 promotionString _ = Nothing
 
-moveToPgnHelper :: Bool -> Bool -> Move -> PieceField -> Bool -> Bool -> PgnMove
-moveToPgnHelper isCheck _ cm@(CastlingMove _ _ _ _) _ _ _ = concat $ catMaybes [Just (show cm), makeMaybe isCheck "+"]
-moveToPgnHelper isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
+moveToPgnHelper :: Bool -> Bool -> Bool -> Move -> PieceField -> Bool -> Bool -> PgnMove
+moveToPgnHelper isMate isCheck _ cm@(CastlingMove _ _ _ _) _ _ _ = concat $ catMaybes [Just (show cm), makeMaybe isMate "#", makeMaybe isCheck "+"]
+moveToPgnHelper isMate isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
   where
     pieceString = pgnPieceChar $ pf ^. pfPiece
     columnString = fmap Ch.toLower $ showColumn $ (mv ^. moveFrom) ^. fieldColumn
@@ -166,8 +170,9 @@ moveToPgnHelper isCheck isTake mv pf withColumn withRow = concat $ catMaybes val
     targetString = fmap Ch.toLower $ showField $ mv ^. moveTo
     takeString = makeMaybe isTake "x"
     checkString = makeMaybe isCheck "+"
+    mateString = makeMaybe isMate "#"
     promoteString = fmap ('=':) $ promotionString mv
-    values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, takeString, Just targetString, promoteString, checkString]
+    values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, takeString, Just targetString, promoteString, checkString, mateString]
 
 
 pgnPieceChar :: Piece -> String
@@ -230,7 +235,6 @@ data PgnGame = PgnGame {
 unsafeMoves :: Te.Text -> [PgnMove]
 unsafeMoves s = fromJust $ EitherC.rightToMaybe $ parseOnly parseGameMoves s
 
-
 data GameData = GameData [PgnTag] [String]
 
 parseGameComponents :: Parser GameData
@@ -246,8 +250,11 @@ composeGame :: Either String GameData -> ParsedGame
 composeGame (Left s) = Left $ AttoParseError s
 composeGame (Right (GameData gt pgn)) = parseGame gt pgn
 
+readGameText :: String -> IO Te.Text
+readGameText fp = Tu.strict $ Tu.input $ FS.fromText $ Te.pack fp
+
 gameText :: String -> Int -> IO [Te.Text]
-gameText fp num = fmap ((Data.List.take num) . splitIntoGames) $ Tu.strict $ Tu.input $ FS.fromText $ Te.pack fp
+gameText fp num = fmap ((Data.List.take num) . splitIntoGames) $ readGameText fp
 
 splitIntoGames :: Te.Text -> [Te.Text]
 splitIntoGames text = fmap Te.concat [[needle, t] | t <- tail (Te.splitOn needle text)]
@@ -264,6 +271,10 @@ parseGame tags moves = gameParser game
   where game = gameFromStart pgnToMove moves
         gameParser (Left s) = Left $ PgnParseError s
         gameParser (Right g) = Right $ PgnGame tags g
+
+
+getGamesFromText :: Te.Text -> [ParsedGame]
+getGamesFromText text = fmap readSingleGame $ splitIntoGames text
   
 getGames :: String -> Int -> IO [ParsedGame]
 getGames fp num = do

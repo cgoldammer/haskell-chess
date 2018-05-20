@@ -27,14 +27,18 @@ resultParser = do
   res <- string "1-0" <|> string "1/2-1/2" <|> string "0-1"
   return $ resultReadValue $ Te.unpack res
 
-namePartParser = many' (letter <|> space <|> char '\'')
+namePartParser = many' (digit <|> char '_' <|> letter <|> space <|> char '\'')
+
+firstNameParser :: Parser String
+firstNameParser = do
+  string ", "
+  namePartParser
 
 nameParser :: Parser Player
 nameParser = do
   last <- namePartParser
-  string ", "
-  first <- namePartParser
-  return $ Player first last
+  first :: Maybe String <- option Nothing (Just <$> firstNameParser)
+  return $ Player (maybe "" id first) last
 
 nameParse = letter <|> char ',' <|> space
 
@@ -46,11 +50,17 @@ tagParse tagName p = do
   endOfLine
   return content
 
-
 fullTagParse :: Parser PgnTag
-fullTagParse = do
-  result <- eventParse <|> siteParse <|> dateParse <|> roundParse <|> whitePlayerParse <|> blackPlayerParse <|> resultParse <|> otherParse
-  return result
+fullTagParse =  eventParse 
+            <|> siteParse
+            <|> dateParse
+            <|> roundParse
+            <|> whitePlayerParse
+            <|> blackPlayerParse
+            <|> whiteEloParse
+            <|> blackEloParse
+            <|> resultParse
+            <|> otherParse
 
 parseAllTags :: Parser [PgnTag]
 parseAllTags = do
@@ -89,16 +99,20 @@ data PgnTag =
   | PgnRound Int
   | PgnWhite Player
   | PgnBlack Player
+  | PgnWhiteElo Int
+  | PgnBlackElo Int
   | PgnResult PossibleResult
   deriving (Show, Eq)
 
 formatForDB :: PgnTag -> (String, String)
 formatForDB (PgnEvent s) = ("Event", s)
-formatForDB (PgnOther name s) = (name, s)
 formatForDB (PgnDate s) = ("Date", s)
 formatForDB (PgnRound s) = ("Round", show s)
 formatForDB (PgnWhite player) = ("White", show player)
-formatForDB (PgnBlack player) = ("White", show player)
+formatForDB (PgnBlack player) = ("Black", show player)
+formatForDB (PgnWhiteElo rating) = ("WhiteElo", show rating)
+formatForDB (PgnBlackElo rating) = ("BlackElo", show rating)
+formatForDB (PgnOther name s) = (name, s)
 
 
 moveBegin :: Parser ()
@@ -190,9 +204,11 @@ parseGameMoves = do
 
 eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap (Te.unpack) $ Data.Attoparsec.Text.takeWhile (/= '\"')
 siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
-dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ letter <|> space
+dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ digit <|> char '.'
 roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
 whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
 blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
 resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" $ resultParser
+whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many' digit
+blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many' digit
 

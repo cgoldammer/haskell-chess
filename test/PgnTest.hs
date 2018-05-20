@@ -36,7 +36,7 @@ fullMoves = [
 
 pgnEqualMoveTest :: String -> Piece -> String -> Test
 pgnEqualMoveTest moveString piece pgnString = pgnString ~=? pgnMoveParse
-    where   pgnMoveParse = moveToPgn False False Standard mv pf
+    where   pgnMoveParse = moveToPgn False False False Standard mv pf
             mv = snd $ fromJust $ stringToMove startingGS moveString -- Move
             from = mv ^. moveFrom
             pf = PieceField piece White from
@@ -61,6 +61,8 @@ tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
     , ("[Event \"Some - ? Other\"]\n", PgnEvent "Some - ? Other")
     , ("[Event \"Tata Steel-A 78th\"]\n", PgnEvent "Tata Steel-A 78th")
+    , ("[Date \"2016.01.16\"]\n", PgnDate "2016.01.16")
+    , ("[WhiteElo \"1001\"]\n", PgnWhiteElo 1001)
     , ("[Result \"1-0\"]\n", PgnResult WhiteWin)
     , ("[Result \"0-1\"]\n", PgnResult BlackWin)
     , ("[Result \"1/2-1/2\"]\n", PgnResult Draw)
@@ -128,9 +130,11 @@ movesGood = [
     , "1.d4 Nf6 2.Bg5 d5 3.Nd2 c6 4.e3 Bf5 5.Bd3 Bg6 6.Ngf3 Nbd7 7.Qe2 Ne4 8.Bxe4 dxe4 9.Nh4 Qa5 10.Nxg6 hxg6 11.Bf4"
     , "1.d4 Nf6 2.Bg5 d5 3.Nd2 c6 4.e3 Bf5 5.Bd3 Bg6"
     , "1.d4 Nf6 2.Bg5 g6 3.Bxf6 exf6 4.e3 Bg7 5.g3 d5 6.Bg2 c6 7.Ne2 O-O 8.Nd2 Nd7 9.c4 dxc4 10.Nxc4 Nb6 11.Na5 Nd5 12.Qd2 f5 13.b4 Re8 14.Rc1 a6 15.a3 Re7 16.Rxc6 Bh6 17.Rc5 Nxe3 18.fxe3 Bxe3 19.Qd3 f4 20.gxf4 Bg4 21.Re5 Rxe5 22.fxe5 Bh6 23.Qe4 Bf5 24.Qxb7 Qh4+ 25.Ng3 Rc8 26.Nc6 Rxc6 27.Qxc6 Qxd4 28.Qa8+ Kg7 29.Nxf5+ gxf5 30.Qf3 Qd2+ 31.Kf1 Be3 32.Qg3+ Kf8 33.Bf3 f4 34.Qe1 Qd3+ 35.Qe2 Qb1+ 36.Kg2 Qg6+ 37.Kh3  1-0"
-    , " 1. g3 g6 2. Bg2 Bg7 3. e4 e5 4. Ne2 c5 5. d3 Nc6 6. Be3 d6 7. Qd2 Nd4 8. c3 Nxe2 9. Qxe2 Ne7 10. h4 h6 11. h5 g5 12. f4 exf4 13. gxf4 gxf4 14. Bxf4 Nc6 15.  Na3 Be5 16. Be3 Be6 17. Nc4 Bg3+ 18. Kd2 Qd7 19. d4 cxd4 20. cxd4 Ne5 21. Nxe5 dxe5 22. d5 Bg4 23. Bf3 Bxf3 24. Qxf3 Qb5 25. Rac1 Qxb2+ 26. Kd1 Bf4 27. Bxf4 exf4 28. Qxf4 Rg8 29. Rf1 Qd4+ 30. Ke1 Qb4+ 31. Kd1 Qd4+ 32. Ke1 Qb4+ 1/2-1/2" ]
+    , " 1. g3 g6 2. Bg2 Bg7 3. e4 e5 4. Ne2 c5 5. d3 Nc6 6. Be3 d6 7. Qd2 Nd4 8. c3 Nxe2 9. Qxe2 Ne7 10. h4 h6 11. h5 g5 12. f4 exf4 13. gxf4 gxf4 14. Bxf4 Nc6 15.  Na3 Be5 16. Be3 Be6 17. Nc4 Bg3+ 18. Kd2 Qd7 19. d4 cxd4 20. cxd4 Ne5 21. Nxe5 dxe5 22. d5 Bg4 23. Bf3 Bxf3 24. Qxf3 Qb5 25. Rac1 Qxb2+ 26. Kd1 Bf4 27. Bxf4 exf4 28. Qxf4 Rg8 29. Rf1 Qd4+ 30. Ke1 Qb4+ 31. Kd1 Qd4+ 32. Ke1 Qb4+ 1/2-1/2"
+    , "1. f3 e5 2. g4 Qh4#"
+    , "1. f3 {[%clk 0:15:08]} 1... e5 2. g4 {[%clk 0:15:08]} 2... Qh4# {[%clk 0:15:08]} 1-0"]
 
-tt = " 1. g3 g6 2. Bg2 Bg7 3. e4 e5 4. Ne2 c5 5. d3 Nc6 6. Be3 d6 7. Qd2 Nd4 8. c3 Nxe2 9. Qxe2 Ne7 10. h4 h6 11. h5 g5 12. f4 exf4 13. gxf4 gxf4 14. Bxf4 Nc6 15.  Na3 Be5 16. Be3 Be6 17. Nc4 Bg3+ 18. Kd2 Qd7 19. d4 cxd4 20. cxd4 Ne5 21. Nxe5 dxe5"
+
 
 testMovesNonParse :: String -> Test
 testMovesNonParse s = Nothing ~=? parsed
@@ -188,13 +192,23 @@ testExternalPgn = TestCase $ do
     let eitherGame = readSingleGame gamePgn
     isRight eitherGame @? "Game is not read: " ++ show eitherGame
 
-testExternalPgns = TestCase $ do
-  let file = "test/files/many.pgn"
-  let number = 1
+testExternalPgns fileName = TestCase $ do
+  let file = "test/files/" ++ fileName
+  let number = 10
   games <- getGames file number
   let (lefts, rights) = Data.List.span Data.Either.isLeft games
   let total = length games
-  assertEqual ((show total) ++  "games. Not all games parsed" ++ show lefts) number (length rights)
+  assertEqual ((show total) ++ " games. Not all games parsed" ++ show lefts) total (length rights)
+
+testExternalPgnsFile fileName = TestCase $ do
+  let file = "test/files/" ++ fileName
+  text <- readGameText file 
+  let error = "Text length: " ++ show (Te.length text)
+  let games = getGamesFromText text
+  let (lefts, rights) = Data.List.span Data.Either.isLeft games
+  let total = length games
+  let error = ((show total) ++ " games. Not all games parsed" ++ show lefts)
+  assertEqual error total (length rights)
 
 
 testToPgn :: GameState -> [String] -> Test
@@ -210,6 +224,7 @@ toPgnData = [
   , (["WKA1", "WNB1", "BKA8", "WNB5"], ["N1c3"])
   , (["WKA1", "WNB1", "BKA8", "WNB5", "WND1", "WND5"], ["Nb1c3"])
   , (["WKA1", "BKA8", "WRB2"], ["Ra2+"])
+  , (["WKA1", "BKA8", "WRB2", "WRC3"], ["Ra3#"])
   ]
 
 toPgnDataCastles = [
@@ -245,7 +260,9 @@ promotionTests = [
 
 externalFileTests = [
     "Cannot read file with one PGN: " ~: testExternalPgn
-  , "Cannot read file with many PGNs: " ~: testExternalPgns
+  , "Cannot read file with many PGNs: " ~: testExternalPgns "many.pgn"
+  , "Cannot read file with rapid games: " ~: testExternalPgns "rapid.pgn"
+  , "Cannot read file with rapid games: " ~: testExternalPgnsFile "rapid.pgn"
   ]
 
 moveListTests = [
@@ -260,7 +277,7 @@ pgnTests = [
     "Promotion tests: " ~: promotionTests
   , "External file tests: " ~: externalFileTests
   , "Assorted tests: " ~: singleTests
-  -- , "Pgn game parsing tests:" ~: pgnParseTests
+  , "Pgn game parsing tests:" ~: pgnParseTests
   , "Tag parsing" ~: testTags
   , "Parsing move lists" ~: moveListTests
   , "Exporting PGN works correctly" ~: toPgnTests

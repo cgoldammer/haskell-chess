@@ -20,6 +20,7 @@ main = do
   let gameLengths = fmap (Data.List.length . gameMoves . parsedPgnGame) $ rights
   print $ "Number of moves:" ++ show gameLengths
   print $ "Correctly parsed:" ++ show (Data.List.length rights)
+  print $ "Incorrectly parsed:" ++ show lefts
 
 -- stack exec -- profile-exe +RTS -sstderr
 -- 7/30, 11pm: 17.4s for n=40 games

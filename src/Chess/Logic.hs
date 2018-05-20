@@ -84,8 +84,9 @@ canCastle _ = True
 
 type CastlingRights = PlayerData (CastlingData Bool)
 
--- | A `GameState` describes the current game position fully. It contains the same information as the
--- Fen notation <https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation>.
+-- |A `GameState` describes the current game position fully. There is a one-to-one relationship
+-- between a `GameState` and a fen position 
+-- <https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation>.
 data GameState = GameState {
       _gsPosition :: Position
     , _gsColor :: Color
@@ -95,7 +96,7 @@ data GameState = GameState {
     , _gsFullMove :: Int} deriving (Eq, Show)
 makeLenses ''GameState
 
-
+-- |Creating default game states in which players can either castle or not castle
 castleAll = PlayerData (CastlingData True True) (CastlingData True True)
 
 defaultGameState :: Position -> Color -> GameState
@@ -111,21 +112,28 @@ startGameString = [
   , "WPA2", "WPB2", "WPC2", "WPD2", "WPE2", "WPF2", "WPG2", "WPH2"
   , "BPA7", "BPB7", "BPC7", "BPD7", "BPE7", "BPF7", "BPG7", "BPH7"
   , "BRA8", "BNB8", "BBC8", "BQD8", "BKE8", "BBF8", "BNG8", "BRH8"]
+
+startingGS :: GameState
 startingGS = defaultGameState (fmap (fromJust . stringToPieceField) startGameString) White
 
 
+-- |Given a gamestate and a move, return which piece made the move
 movePiece :: GameState -> Move -> Piece
 movePiece gs mv = (head matchingPieces) ^. pfPiece
   where from = mv ^. moveFrom
         matchingPieces = selectByPosition (gs ^. gsPosition) [from]
         
-
+-- |Given a Maybe GameState, try to make a list of moves.
+-- This returns Nothing whenever a move isn't legal or when the starting state 
+-- was Nothing. This function can be used to safely fold over a list of moves to get 
+-- the final state.
 tryMoves :: Maybe GameState -> [Move] -> Maybe GameState
 tryMoves Nothing _ = Nothing
 tryMoves (Just gs) [] = Just gs
-tryMoves (Just gs) (mv : rest) = if isLegalMove then tryMoves (Just (move gs piece mv)) rest else Nothing
+tryMoves (Just gs) (mv : rest) = if isLegalMove then nextState else Nothing
   where piece = movePiece gs mv
         isLegalMove = elem mv $ fmap snd $ allNextLegalMoves gs
+        nextState = tryMoves (Just (move gs piece mv)) rest 
 
 type IsTaking = Bool
 type IsPawnMove = Bool
@@ -136,10 +144,14 @@ updateFullMove Black n = n + 1
 
 updateHalfMove :: GameState -> Move -> Int -> Int
 updateHalfMove _ (EnPassantMove _ _ _) _ = 1
+updateHalfMove _ (PromotionMove _ _ _) _ = 1
+updateHalfMove _ (CastlingMove _ _ _ _) _ = 1
 updateHalfMove gs mv@(StandardMove from to) n = if (isTakingMove || isPawnMove) then 1 else updateFullMove color n
   where isTakingMove = isTaking gs to
         isPawnMove = movePiece gs mv == Pawn
         color = gs ^. gsColor
+
+
 
 getPositionChange :: GameState -> Piece -> Move -> ([Field], [PieceField])
 getPositionChange gs piece move = (removePf ++ removeTaken, addPf)

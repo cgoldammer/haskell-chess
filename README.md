@@ -1,8 +1,12 @@
-# Chess-haskell
+# Haskell-chess
 
 ## Overview
 
-A chess rule engine written in Haskell
+A chess rule library written in Haskell
+
+## General notes
+
+- After I started this project, I looked at similar projects, and some of them were coded much better than what I did. So I copied some of their approaches, for instance the structure of moves from (https://github.com/grzegorzbalcerek/chess-haskell). Thanks to all those who created these projects!
 
 ### Central features:
 
@@ -18,6 +22,7 @@ A chess rule engine written in Haskell
 These features are created out of curiousity, and they might change or disappear in later interations of this library
 
 - algorithmically create chess mating puzzles
+- extract metrics for a game and a position. For instance, we can obtain how many pieces can be captured in a position, which can be combined with other metrics to create a measure of how tactically complicated the position is.
 
 ## Guiding principles
 
@@ -36,5 +41,3 @@ There's natural tradeoff between safety and speed. Consider parsing a PGN into a
   - what's White's material advantage (combined with the evaluation, allows quantifying the value of the initiative)
   - how many pieces can be taken (this is a measure of how sharp a position is)
   - If a player has the advantage, does realizing this advantage require a number of precise moves or does the player have a wide number of moves that leave her with an advantage?
-
-
