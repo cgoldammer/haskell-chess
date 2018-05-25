@@ -10,11 +10,11 @@ module Chess.Pgn.Logic (
   , pgnToTargetField, pgnToPromotion
   , PgnTag (..), Player (..)
   , PgnGame (..), Game(..)
-  , PossibleResult(..)
+  , Result(..)
   , MoveSummary (..)
   , ParsedGame 
   , tagParse
-  , eventParse, siteParse, fullTagParse, parseAllTags
+  , eventParse, siteParse, fullTagParse
   , parseGameMoves, parseGameComponents, moveParser, bothMoveParser, sidelineParser
   , readSingleGame
   , gameSummaries
@@ -30,7 +30,6 @@ module Chess.Pgn.Logic (
   , moveToPgn) where
 
 import GHC.Generics (Generic)
-
 import Control.Lens ((^.))
 import Control.Applicative ((<|>))
 import Data.Attoparsec.Text (Parser, parseOnly, endOfLine, space, digit, char)
@@ -70,8 +69,7 @@ renameCastles pgnMove _ = pgnMove
 
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
 possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
-    where   
-            allMoves = filter (\(piece, _) -> piece == movePiece) $ allNextLegalMoves gs
+    where   allMoves = filter ((==movePiece) . fst) $ allNextLegalMoves gs
             pgnCleaned = renameCastles (filter filterMoves pgn) color -- PgnMove
             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
             relevantMoves = filter (if (isJust promotionPiece) then (isPromotionMove . snd) else (not . isPromotionMove. snd)) allMoves
@@ -102,12 +100,12 @@ createPgnMoves :: GameState -> [(Move, PieceField)] -> [[PgnMove]]
 createPgnMoves gs ls = fmap (uncurry expander) ls
   where expander mv pf = expandMove gs mv pf
 
+
+
 expandMove :: GameState -> Move -> PieceField -> [PgnMove]
 expandMove gs mv pf = expanded 
-    where   withColumn = moveHelper WithColumn mv pf
-            withNeither = moveHelper Standard mv pf
-            withRow = moveHelper WithRow mv pf
-            withBoth = moveHelper WithBoth mv pf
+    where   moveTypes = [Standard, WithColumn, WithRow, WithBoth]
+            [withNeither, withColumn, withRow, withBoth] = fmap (\f -> moveHelper f mv pf) moveTypes
             piece = pf ^. pfPiece
             newState = move gs piece mv
             isCheck = inCheck newState
@@ -239,6 +237,9 @@ splitIntoGames :: Text -> [Text]
 splitIntoGames text = fmap Text.concat [[needle, t] | t <- tail (splitOn needle text)]
   where needle = pack "[Event "
 
+-- | Parsing a game can fail either because the attoparsec part did not succeed
+-- or because the game logic could not be read, for instance if the pgn (1.Nb3) contained
+-- or because the game logic could not be read, for instance if the pgn contained
 data ParseError = AttoParseError String | PgnParseError String deriving (Show)
 type ParsedGame = Either ParseError PgnGame
 

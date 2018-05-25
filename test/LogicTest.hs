@@ -26,34 +26,27 @@ possibleBishopMoves = ["A1", "C3", "C1", "H8"]
 impossibleBishopMoves = ["B1", "B2"]
 allBishopMoves = concat $ pieceFields $ PieceField Bishop White bishopPosition
 
-
-
 intersect :: Ord a => [a] -> [a] -> S.Set a
 intersect l1 l2 = S.intersection (S.fromList l1) (S.fromList l2)
 
-
 testFromString :: String -> [String] -> [String] -> [Field] -> [Test]
-testFromString name ps imps all = testPossible name psS impsS all
-    where   psS = catMaybes $ fmap stringToField ps
-            impsS = catMaybes $ fmap stringToField imps
+testFromString name possible impossible all = testPossible name posPossible posImpossible all
+    where [posPossible, posImpossible] = fmap (\strings -> (catMaybes (fmap stringToField strings))) [possible, impossible]
                 
-
 testPossible :: (Ord a, Show a) => String -> [a] -> [a] -> [a] -> [Test]
-testPossible name ps imps all = [testPossible, testImpossible]
+testPossible name possible impossible all = [testPossible, testImpossible]
   where testPossible = TestCase (assertBool possibleMessage conditionPossible)
         testImpossible = TestCase (assertBool impossibleMessage conditionImpossible)
-        conditionPossible = length intersectionPossible == length ps
+        conditionPossible = length intersectionPossible == length possible
         conditionImpossible = length intersectionImpossible == 0
-        intersectionPossible = intersect ps all
-        intersectionImpossible = intersect imps all
-        possibleMessage = name ++ " possible moves: " ++ (show all)
+        [intersectionPossible, intersectionImpossible] = fmap (\v -> intersect v all) [possible, impossible]
+        possibleMessage = name ++ " possible moves: " ++ (show possible)
         impossibleMessage = name ++ " impossible moves: " ++ (show intersectionPossible)
 
 knightTests = testFromString "knight" possibleKnightMoves impossibleKnightMoves allKnightMoves
 rookTests = testFromString "rook" possibleRookMoves impossibleRookMoves allRookMoves
 bishopTests = testFromString "bishop" possibleBishopMoves impossibleBishopMoves allBishopMoves
 possibleTests = knightTests ++ rookTests ++ bishopTests
-
 
 matePositions = [["WKA1", "BQA2", "BKA3"],
                  ["WKA1", "BRA8", "BRB8", "BKC8"]]
@@ -62,8 +55,6 @@ nonMatePositions = [["WKA1", "BRA8", "BRB8", "BKB4"]]
 
 mateTest gs = TestCase (assertBool mateMessage (isMate gs))
     where mateMessage = "This should be mate, but isn't: " ++ (show gs)
-
-
 
 nonMateTest gs = TestCase (assertBool mateMessage (not (isMate gs)))
     where mateMessage = "This should not be mate, but is: " ++ (show gs)

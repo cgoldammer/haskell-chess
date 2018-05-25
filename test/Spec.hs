@@ -12,9 +12,7 @@ import PgnTest
 import StockfishTest
 
 main :: IO ()
-main = do
-    runTestTT tests
-    return ()
+main = runTestTT tests >> return ()
 
 tests = TestList [
     "Logic tests: " ~: logicTests

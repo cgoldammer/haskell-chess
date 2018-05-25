@@ -58,6 +58,7 @@ pgnSameGameAsMoveTests = fmap (\(ms, pgnMove) -> pgnSameGameAsMove ms pgnMove) m
 
 testCastlingParser = castleAll ~=? castlingRightsParser "KQkq"
 
+-- Do the tags read into the expected results?
 tags = [
       ("[Event \"Wch U12\"]\n", PgnEvent "Wch U12")
     , ("[Event \"Some - ? Other\"]\n", PgnEvent "Some - ? Other")
@@ -89,12 +90,15 @@ testStringTag = Right expected ~=? parsed
           parser = parseOnly (tagParse "Event" $ many' $ letter <|> space <|> digit)
           expected = "Wch U12"
 
+-- Moves that should not parse.
 movesNotParse = [
       " e4 e5"
     , "e4 e5"
     , "1. "
     ]
 
+-- Moves that are illegal. These should parse in Attoparsec, but not parse into
+-- a legal game.
 movesNotLegal = [
       "1.e4 e5 2. Ne2 Nf6 3. Nc3"
     , "1.e1 c4"
@@ -118,6 +122,7 @@ testMovesGood s = isRight game ~? error
           error = "Read into game failed:" ++ show s ++ " Game: " ++ show game ++ " | Parsed to: " ++ show parsedPgnMoves ++ show game
 
 
+-- Testing that the parsed games has the right number of moves.
 fullParse = [
     ("1. e4 e5 (1... e6 $22 $18 {[%emt 1:40:00] comment} 2. f4 (2. c4 $13)) 2. d4 {comment with , and # and $ and ()} c5 *", 4)
   , ("1.e4 (1.Nf4 (..Nf6) ((1.d4) (1.Nf4))) 1... e5 2.Nf3 Nf6", 4)
@@ -126,7 +131,7 @@ fullParse = [
 testFullParse :: (String, Int) -> Test
 testFullParse (s, num) = correct ~? error
     where parsedPgnMoves = EitherC.rightToMaybe $ parseOnly parseGameMoves $ Te.pack s -- Maybe [Move]
-          error = "Read into moves failed:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
+          error = "The parsed game does not have the right number of moves:" ++ s ++ " | Parsed to: " ++ show parsedPgnMoves
           correct = length (fromJust parsedPgnMoves) == num
 
 toGameState :: Position -> GameState
@@ -143,7 +148,7 @@ gsPromote = stringToGs ["WKA1", "BKA8", "WPG7"]
 
 testPromotionParse = TestCase $ assertBool error $ isJust mv
   where mv = pgnToMove gsPromote "g8=Q+"
-        error = "Can parse promotion move"
+        error = "Cannot parse promotion move"
 
 tagFilter :: Te.Text -> Bool
 tagFilter t = not (Te.null t) && (Te.head t == '[')
@@ -235,5 +240,3 @@ pgnTests = [
   , "Exporting PGN Castling works correctly" ~: toPgnTestsCastles
   , "Exporting PGN Promotion works correctly" ~: toPgnTestsPromotes
   ]
-
-gm = "1.d4 Nf6 2.Bg5 c5 3.e3 Qb6 4.Nc3 e6 5.dxc5 Bxc5 6.Rb1 d5 7.Qf3 Nbd7 8.Bb5 Ne4 9.Nxe4 dxe4 10.Qe2 a6 11.Bxd7+ Bxd7 12.Qd2 f6 13.Bh4 Rd8 14.Ne2 Bb5 15.Qc1 Bb4+ 16.c3 Bxe2 17.Kxe2 Qb5+ 18.Ke1 Be7 19.Qc2 Rd3 20.Qb3 Qd7 21.Rd1 Kf7 22.Rxd3 Qxd3 23.Qd1 Qb5 24.Qe2 Qd5 25.b3 Rd8 26.f4 exf3 27.gxf3 Qc5 28.Kf2 Qxc3 29.Rd1 Rxd1 30.Qxd1 Qb2+ 31.Qe2 Qxe2+ 32.Kxe2 Bd6 33.h3 Be5 34.Be1 Ke7 35.Kd3 Kd7 36.a4 Kc6 37.Kc4 Bd6 38.Bh4 Bc5 39.e4 Be3 40.Be1 Bf4 41.Bf2 Bd6 42.Kd3 Be5 43.Kc4 g5 44.Kd3 Bf4 45.Bd4 f5 46.Ke2 h5 47.Kf1 Kd6 48.Ke2 Kc6 49.Ke1 Bd6 50.Ke2 Bc7 51.Be3 g4 52.fxg4 hxg4 53.hxg4 fxg4 54.Kf1 Bb6 55.Bh6 Bd4 56.Bf8 Be5 57.Kg2 Bd6 58.Bg7 Kc5 59.Bc3 b6 60.Kf2 Bf4 61.Kg2 b5 62.axb5 Kxb5 63.Kf2 Bc7 64.Bd2 Ba5 65.Bf4 Bb6+ 66.Kg3 Kb4 67.Be5 Kxb3 68.Kxg4 Kc4 69.Kg5 a5 70.Kg6 Bd4 71.Bc7 a4 72.Bd6 e5 73.Kf5 Kb3  0-1"

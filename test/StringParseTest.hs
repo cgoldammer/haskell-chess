@@ -2,7 +2,7 @@ module StringParseTest (stringParseTests) where
 
 import Test.HUnit
 
-import qualified Data.Set as S
+import Data.Set
 import Data.Maybe
 
 import Chess.Algorithms

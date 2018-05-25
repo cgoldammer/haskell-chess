@@ -1,7 +1,10 @@
 -- | Functionality to read external PGNs. This module deals with getting the
 -- data into an intermediate format that can then be used by the `Chess.Pgn.Logic` module
 -- to be parsed into a full `Game`.
-
+--
+-- This module contains a fair number of hacks. One thing I've noted is that there
+-- doesn't seem to be a formal specification for PGNs, so instead my main goal was
+-- that I could parse PGNs as exported by Chessbase, chess.com, and external sites.
 module Chess.Pgn.External where
 
 import Control.Monad (replicateM)
@@ -9,15 +12,16 @@ import Data.Attoparsec.Text (Parser, takeWhile, string, digit, char, letter, spa
 import Data.Attoparsec.Combinator (many', option, many1')
 import Data.Text as Te (Text, pack, unpack)
 import Control.Applicative ((<|>))
+import Data.Foldable (fold)
 
--- Importing Pgns starts with an external file.
 type PgnMove = String
 
-resultReadValue :: String -> PossibleResult
+data Result = WhiteWin | Draw | BlackWin | Undetermined deriving (Eq)
+resultReadValue :: String -> Result
 resultReadValue "1-0" = WhiteWin
 resultReadValue "0-1" = BlackWin
 resultReadValue "1/2-1/2" = Draw
-resultReadValue _ = Draw
+resultReadValue _ = Undetermined
 
 resultParser = do
   res <- string "1-0" <|> string "1/2-1/2" <|> string "0-1"
@@ -30,6 +34,11 @@ firstNameParser = do
   string ", "
   namePartParser
 
+-- In PGNs, names for over-the-board games are provided in the form of lastname, firstname.
+-- However, in online games, it's usual to just report the username. So we parse the name
+-- into a mandatory last name (everything before a comma) and an optional first name
+-- after the comma. Note that this will break in the case where a username contains
+-- a comma, or various other non-standard characters.
 nameParser :: Parser Player
 nameParser = do
   last <- namePartParser
@@ -38,6 +47,8 @@ nameParser = do
 
 nameParse = letter <|> char ',' <|> space
 
+-- The default logic for parsing tags. All specific parsers (e.g. a name parser)
+-- will work with the inside content that's parsed from here. 
 tagParse :: String -> Parser a -> Parser a
 tagParse tagName p = do
   string $ pack $ "[" ++ tagName ++ " \""
@@ -46,6 +57,19 @@ tagParse tagName p = do
   endOfLine
   return content
 
+eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap unpack $ Data.Attoparsec.Text.takeWhile (/= '\"')
+siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
+dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ digit <|> char '.'
+roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
+whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
+blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
+resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" $ resultParser
+whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many' digit
+blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many' digit
+
+
+-- | The full set of possible tags. The `otherParse` is a catch-all, and everything
+-- that can't be parsed exactly parsed into that structure.
 fullTagParse :: Parser PgnTag
 fullTagParse =  eventParse 
             <|> siteParse
@@ -76,16 +100,14 @@ otherParse = do
   
 data Player = Player {firstName :: String, lastName :: String} deriving (Eq)
 
-data PossibleResult = WhiteWin | Draw | BlackWin deriving (Eq)
-
 instance Show Player where
   show (Player first last) = first ++ " " ++ last
 
-instance Show PossibleResult where
+instance Show Result where
   show WhiteWin = "1"
   show BlackWin = "0"
   show Draw = "D"
-
+  show Undetermined = "?"
 
 data PgnTag = 
     PgnEvent String
@@ -97,9 +119,11 @@ data PgnTag =
   | PgnBlack Player
   | PgnWhiteElo Int
   | PgnBlackElo Int
-  | PgnResult PossibleResult
+  | PgnResult Result
   deriving (Show, Eq)
 
+-- |Provide a nicely formatted tupe of strings to serialized tags in the
+-- database
 formatForDB :: PgnTag -> (String, String)
 formatForDB (PgnEvent s) = ("Event", s)
 formatForDB (PgnDate s) = ("Date", s)
@@ -151,8 +175,6 @@ dollarParser = do
   many' digit
   return ()
 
-
-
 -- | Parses comments for sidelines in a PGN.
 -- This is surprisingly non-trivial: In a PGN, there can be arbitrarily many sidelines, each
 -- of which can be arbitrarily nested with more moves.
@@ -179,8 +201,8 @@ insideParser = do
 singleMoveParser :: Parser String
 singleMoveParser = do
   many' space
-  first <- satisfy $ inClass "abcdefghKNBQRO"
-  rest <- many1' (letter <|> digit <|> char '#' <|> char 'x' <|> char '+' <|> char '=' <|> char 'O' <|> char '-')
+  first <- satisfy $ inClass $ ['a'..'h'] ++ "KNBQRO"
+  rest <- many1' $ fold $ [letter, digit] ++ fmap char ("#x+=O-")
   many' dollarParser
   many' $ sidelineParser <|> commentParser
   return $ first : rest
@@ -196,15 +218,4 @@ parseGameMoves = do
   many' space
   moves <- many1' moveParser
   return $ concat moves
-  -- return $ concat $ (fmap . fmap) (filter filterMoves) moves
-
-eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap unpack $ Data.Attoparsec.Text.takeWhile (/= '\"')
-siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
-dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ digit <|> char '.'
-roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
-whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
-blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
-resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" $ resultParser
-whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many' digit
-blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many' digit
 

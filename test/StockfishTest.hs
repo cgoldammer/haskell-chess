@@ -40,6 +40,7 @@ positionsBest = [
   (["WKG1", "WPG2", "WNF1", "BKG8", "BQE3"], "F1E3", 300, 10000)
   ]
 
+-- The evaluation for the positions is in the expected range.
 testFindBest (psList, mvExpected, numExpectedLower, numExpectedHigher) = TestCase $ do
   let fen = fullFen . fromJust . stringToPosition $ psList
   let gs = fromJust $ fenToGameState fen

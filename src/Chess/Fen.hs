@@ -84,7 +84,7 @@ parseFen = do
   playerToMoveString :: Char <- (char 'w' <|> char 'b')
   let playerToMove = fromJust $ colorString [toUpper playerToMoveString]
   space
-  castlingRightsString :: String <- many1' $ foldMap char ("KQkq" :: String)
+  castlingRightsString :: String <- many1' $ foldMap char ("KQkq-" :: String)
   let castlingRights = castlingRightsParser castlingRightsString
   optional space
   epTargetString :: String <- many1' $ fold [letter, digit, char '-']
