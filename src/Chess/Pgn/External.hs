@@ -4,17 +4,13 @@
 
 module Chess.Pgn.External where
 
-import Control.Monad
-import Data.Attoparsec.Text
-import Data.Attoparsec.Combinator
-import qualified Data.Attoparsec.ByteString.Char8 as C
-import qualified Data.Text as Te
-import Control.Lens hiding ((.=))
-import Control.Applicative
-import qualified Turtle as Tu
+import Control.Monad (replicateM)
+import Data.Attoparsec.Text (Parser, takeWhile, string, digit, char, letter, space, endOfLine, skipWhile, takeTill, satisfy, inClass)
+import Data.Attoparsec.Combinator (many', option, many1')
+import Data.Text as Te (Text, pack, unpack)
+import Control.Applicative ((<|>))
 
 -- Importing Pgns starts with an external file.
-
 type PgnMove = String
 
 resultReadValue :: String -> PossibleResult
@@ -25,7 +21,7 @@ resultReadValue _ = Draw
 
 resultParser = do
   res <- string "1-0" <|> string "1/2-1/2" <|> string "0-1"
-  return $ resultReadValue $ Te.unpack res
+  return $ resultReadValue $ unpack res
 
 namePartParser = many' (digit <|> char '_' <|> letter <|> space <|> char '\'')
 
@@ -44,7 +40,7 @@ nameParse = letter <|> char ',' <|> space
 
 tagParse :: String -> Parser a -> Parser a
 tagParse tagName p = do
-  string $ Te.pack $ "[" ++ tagName ++ " \""
+  string $ pack $ "[" ++ tagName ++ " \""
   content <- p
   string "\"]"
   endOfLine
@@ -73,10 +69,10 @@ otherParse = do
   tagName <- many' letter
   space
   char '"'
-  event :: Te.Text <- Data.Attoparsec.Text.takeWhile (\c -> c /='\"')
+  event :: Text <- Data.Attoparsec.Text.takeWhile (\c -> c /='\"')
   string "\"]"
   endOfLine
-  return $ PgnOther tagName (Te.unpack event)
+  return $ PgnOther tagName (unpack event)
   
 data Player = Player {firstName :: String, lastName :: String} deriving (Eq)
 
@@ -202,7 +198,7 @@ parseGameMoves = do
   return $ concat moves
   -- return $ concat $ (fmap . fmap) (filter filterMoves) moves
 
-eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap (Te.unpack) $ Data.Attoparsec.Text.takeWhile (/= '\"')
+eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap unpack $ Data.Attoparsec.Text.takeWhile (/= '\"')
 siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
 dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ digit <|> char '.'
 roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit

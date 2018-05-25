@@ -3,13 +3,11 @@ module Chess.Algorithms (randomGood, randomPositions) where
 import Chess.Board
 import Chess.Logic
 
-import Control.Lens
-import System.Random
-import qualified Data.List.Unique as Un
+import Control.Lens (view, (^.))
+import Data.List.Unique (unique, repeated)
+import Control.Monad (liftM2)
+import Control.Monad.Random (RandomGen, Rand, getRandomR, evalRandIO)
 import Data.Maybe
-import Data.List
-import Control.Monad
-import Control.Monad.Random
 
 piecePositions :: Piece -> GameState -> Color -> [Field]
 piecePositions pc gs White = getPositions gs pc
@@ -19,7 +17,7 @@ legalPosition :: GameState -> Bool
 legalPosition gs = bothSidesOneKing && noDuplicatedFields && not (isChecking gs)
     where   numberKings = fmap (length . piecePositions King gs) [White, Black]
             bothSidesOneKing = (maximum numberKings == 1) && (minimum numberKings == 1)
-            noDuplicatedFields = 0 == (length . Un.repeated) (fmap (view pfField) (gs ^. gsPosition))
+            noDuplicatedFields = 0 == (length . repeated) (fmap (view pfField) (gs ^. gsPosition))
 
 sensiblePosition :: GameState -> Bool
 sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not sameColorBishops
@@ -28,7 +26,7 @@ sensiblePosition gs = maxLightPieceCount == 2 && length queens == 1 && not sameC
             queens = getPositions gs Queen
             bishops = getPositions gs Bishop
             bishopColors = fmap fieldColor bishops
-            sameColorBishops = Un.unique bishopColors /= bishopColors
+            sameColorBishops = unique bishopColors /= bishopColors
 
 goodPosition :: GameState -> Bool
 goodPosition = liftM2 (&&) legalPosition sensiblePosition

@@ -22,14 +22,13 @@ import Chess.Algorithms
 import Chess.Stockfish
 import Chess.Board
 import Chess.Logic
+import Chess.Fen
 import Chess.Pgn.Logic as Pgn
 
 import Control.Applicative
 
 import Data.Aeson
 import qualified Turtle as Tu
-
--- fen = fullFen mate1PS
 
 mateFromGameState :: GameState -> IO [MateMove]
 mateFromGameState = mateFinder . fullFen . (view gsPosition)

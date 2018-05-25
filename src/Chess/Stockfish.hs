@@ -6,19 +6,16 @@ import Chess.Helpers
 
 import Debug.Trace
 
-import Control.Applicative
-import Control.Lens
-import Data.Aeson
-import Data.Attoparsec.Text
-import Data.Attoparsec.Combinator
-import qualified Data.Attoparsec.ByteString.Char8 as C
-import qualified Data.Char as Ch
-import Data.List
-import Data.Maybe
-import qualified Data.Text as Te
-import qualified Data.ByteString as BS
-import qualified Turtle as Tu
-import qualified Data.Either.Combinators as EitherC
+import Control.Applicative (empty, (<|>))
+import Control.Lens ((^.))
+import Data.Attoparsec.Text (Parser, parseOnly, string, digit, char, space, letter)
+import Data.Attoparsec.Combinator (many', choice)
+import Data.Char (toUpper)
+import Data.List (take, intercalate, sortOn)
+import Data.Maybe (catMaybes, fromJust)
+import Data.Text (Text, pack, splitOn, isInfixOf)
+import Turtle (cd, shell, strict, input)
+import Data.Either.Combinators (rightToMaybe)
 
 type Fen = String
 type MateMove = (Move, Int)
@@ -29,12 +26,12 @@ quoteString s = "'" ++ s ++ "'"
 -- Return a list of the best n moves
 bestMoves :: Fen -> Int -> Int -> IO [StockfishMove]
 bestMoves fen moveTime number = do
-  Tu.cd "/home/cg/haskell-chess/scripts/"
+  cd "/home/cg/haskell-chess/scripts/"
   let arguments = fmap quoteString [fen, show moveTime, show number]
   let gs = fromJust $ fenToGameState fen
   let color = gs ^. gsColor
-  let command = Te.pack $ intercalate " " $ "./bestmoves.sh" : arguments
-  Tu.shell command empty
+  let command = pack $ intercalate " " $ "./bestmoves.sh" : arguments
+  shell command empty
   moves <- readResults gs number
   let movesStandardized = if color == White then moves else fmap invertEval moves
   return movesStandardized
@@ -43,12 +40,12 @@ singleBestMove :: Fen -> Int -> Int -> IO (Maybe StockfishMove)
 singleBestMove fen moveTime number = fmap safeHead $ bestMoves fen moveTime number
 
 
-resultLines :: Int -> IO [Te.Text]
+resultLines :: Int -> IO [Text]
 resultLines number = do
-  Tu.cd "/home/cg/haskell-chess/scripts/"
-  results :: Te.Text <- Tu.strict $ Tu.input "./results.txt"
-  let lines =  Te.splitOn "\n" results
-  let filt = \t -> not $ (Te.pack "upperbound") `Te.isInfixOf` t
+  cd "/home/cg/haskell-chess/scripts/"
+  results :: Text <- strict $ input "./results.txt"
+  let lines =  splitOn "\n" results
+  let filt = \t -> not $ (pack "upperbound") `isInfixOf` t
   return $ filter filt lines
 
 readResults :: GameState -> Int -> IO [StockfishMove]
@@ -56,8 +53,8 @@ readResults gs number = do
   lines <- resultLines number
   return $ readMoves gs lines number
 
-readMoves :: GameState -> [Te.Text] -> Int -> [StockfishMove]
-readMoves gs t number = reverse $ sortOn sortMove $ catMaybes $ fmap (EitherC.rightToMaybe . parser) $ lastLines
+readMoves :: GameState -> [Text] -> Int -> [StockfishMove]
+readMoves gs t number = reverse $ sortOn sortMove $ catMaybes $ fmap (rightToMaybe . parser) $ lastLines
   where   lastLines = Data.List.take number $ tail . tail $ reverse t 
           parser = parseOnly (stockfishLineParser gs)
 
@@ -112,7 +109,7 @@ parseHash = do
   return ()
 
 stockfishMoveRead :: GameState -> String -> Move
-stockfishMoveRead gs mv = snd $ fromJust $ stringToMove gs $ fmap Ch.toUpper mv
+stockfishMoveRead gs mv = snd $ fromJust $ stringToMove gs $ fmap toUpper mv
 
 stockfishLineParser :: GameState -> Parser StockfishMove
 stockfishLineParser gs = do

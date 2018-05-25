@@ -16,7 +16,9 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     
-                       Chess.Board
+                       Chess.Types
+                     , Chess.Board
+                     , Chess.Fen
                      , Chess.Logic
                      , Chess.Algorithms
                      , Chess.Stockfish

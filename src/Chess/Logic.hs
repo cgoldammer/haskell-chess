@@ -12,14 +12,12 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , parsePromotionPiece
             , move, move', updatePositionMove, tryMoves, movePiece
             , isMate
-            , basicFen
-            , fullFen
             , isChecking, isTaking, isLegalPawnMove
             , filterOutInCheckFull, checkInRoute, isCheckInRoute, gameStateRoutes, routeData, returnCheckingRoute
             , inCheck
             , pieceFields
             , pieceFieldForMove
-            , parseFen, fenToGameState, gameStateToFen, parseFen'
+            , parseFen, fenToGameState, gameStateToFen, fullFen
             , castlingRightsParser, freeForCastling
             , allOpponentMoves
             , fenStringToPosition
@@ -30,24 +28,25 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , gameFromString, gameFromStart
             ) where
 
+
+import Debug.Trace (trace)
+import Data.Maybe (fromJust, Maybe(..), catMaybes, isJust)
+import Control.Lens (makeLenses, view, (^.), over)
+import Control.Monad (liftM2, join)
+import Control.Applicative (liftA2, (<|>), optional)
+import Data.String.Utils (replace)
+import Data.Char (toLower, toUpper)
+import Data.Text (pack)
+import Data.Attoparsec.Text (Parser, parseOnly, string, letter, digit, char, space, decimal)
+import Data.Attoparsec.Combinator (many1', endOfInput)
+import Data.Either.Combinators (rightToMaybe)
+import Data.List (partition, intercalate)
+import Data.Foldable (fold, foldMap)
+
+import Chess.Types
 import Chess.Board
 import Chess.Helpers
-
-import Debug.Trace
-import Data.Maybe
-import Control.Lens as L
-import Control.Monad hiding ((^.))
-import Control.Applicative hiding ((^.))
-import qualified Data.String.Utils as SU
-import qualified Data.Char as C
-import qualified Data.Text as Te
-import qualified Text.Read as TR
-import Data.Attoparsec.Text hiding (take, D, takeWhile)
-import Data.Attoparsec.Combinator hiding ((^.))
-import qualified Data.Attoparsec.ByteString.Char8 as C
-import qualified Data.Either.Combinators as EitherC
-import Data.List
-import System.IO.Unsafe
+import Chess.Fen
 
 -- The following fields are often used as part of the chess logic, so I'm defining
 -- them as variables and exporting them.
@@ -55,24 +54,9 @@ rowFields row = fmap (fromJust . stringToField) [c : (show row) | c <- ['A'..'H'
 [a1, b1, c1, d1, e1, f1, g1, h1] = rowFields 1 
 [a8, b8, c8, d8, e8, f8, g8, h8] = rowFields 8
 
-data PlayerData a = PlayerData {
-    dataWhite :: a
-  , dataBlack :: a
-} deriving (Eq, Show)
-
 getPlayerData :: PlayerData a -> Color -> a
 getPlayerData playerData White = dataWhite playerData
 getPlayerData playerData Black = dataBlack playerData
-
-data CastlingData a = CastlingData {
-    canKingSide :: a
-  , canQueenSide :: a
-} deriving (Eq, Show)
-
-instance Functor CastlingData where
-  fmap f (CastlingData king queen) = CastlingData (f king) (f queen)
-
-type CastleKingSide = Bool
 
 getCastlingData :: CastlingData a -> CastleKingSide -> a
 getCastlingData castlingData True = canKingSide castlingData
@@ -81,20 +65,6 @@ getCastlingData castlingData False = canQueenSide castlingData
 canCastle :: (CastlingData Bool) -> Bool
 canCastle (CastlingData False False) = False
 canCastle _ = True
-
-type CastlingRights = PlayerData (CastlingData Bool)
-
--- |A `GameState` describes the current game position fully. There is a one-to-one relationship
--- between a `GameState` and a fen position 
--- <https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation>.
-data GameState = GameState {
-      _gsPosition :: Position
-    , _gsColor :: Color
-    , _gsCastlingRights :: CastlingRights
-    , _gsEnPassantTarget :: Maybe Field
-    , _gsHalfMove :: Int
-    , _gsFullMove :: Int} deriving (Eq, Show)
-makeLenses ''GameState
 
 -- |Creating default game states in which players can either castle or not castle
 castleAll = PlayerData (CastlingData True True) (CastlingData True True)
@@ -275,13 +245,11 @@ updatePlayerCastlingData (CastlingData kBefore qBefore) (CastlingData kNow qNow)
 
 updateCastlingRights :: Move -> CastlingRights -> CastlingRights
 updateCastlingRights (CastlingMove from to rookFrom rookTo) castlingRights = newRights
-  where whiteK = not (from == e1 && rookFrom == h1)
-        whiteQ = not (from == e1 && rookFrom == a1)
-        blackK = not (from == e8 && rookFrom == h8)
-        blackQ = not (from == e8 && rookFrom == a8)
+  where fields = [(e1, h1), (e1, a1), (e8, h8), (e8, a8)]
+        [wK, wQ, bK, bQ] = fmap (\(f1, f2) -> not (from == f1 && rookFrom == f2)) fields
         PlayerData castlingWhite castlingBlack = castlingRights
-        newDataWhite = updatePlayerCastlingData castlingWhite (CastlingData whiteK whiteQ)
-        newDataBlack = updatePlayerCastlingData castlingBlack (CastlingData blackK blackQ)
+        newDataWhite = updatePlayerCastlingData castlingWhite (CastlingData wK wQ)
+        newDataBlack = updatePlayerCastlingData castlingBlack (CastlingData bK bQ)
         newRights = PlayerData newDataWhite newDataBlack
 updateCastlingRights _ castlingRights = castlingRights
   
@@ -306,17 +274,14 @@ isMate gs = noNextMoves && inCheck gs
 
 allOpponentMoves :: GameState -> [(Piece, Move)]
 allOpponentMoves = allPhysicalMoves . invertGameStateColor
-
     
 inCheck :: GameState -> Bool
 inCheck gs@(GameState ps color cr ept hm fm) = (ownKingField gs) `elem` opponentFields
-  where opponentFields = fmap (L.view moveTo) $ allStandardMoves . invertGameStateColor $ gs
+  where opponentFields = fmap (view moveTo) $ allStandardMoves . invertGameStateColor $ gs
 
 isChecking :: GameState -> Bool
 isChecking = inCheck . invertGameStateColor
             
-notInCheck = not . inCheck
-
 filterOutInCheckFull :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
 filterOutInCheckFull gs pms = filter notInCheck pms
     where notInCheck (piece, mv) = not $ isChecking $ updatePositionMove gs piece mv
@@ -586,147 +551,11 @@ getPositions gs pc = fmap (view pfField) $ filter isRightPiece position
 selectByPosition :: Position -> [Field] -> Position
 selectByPosition ps fs = filter (\pf -> (elem (pf ^. pfField) fs)) ps
 
-type Fen = String
-
-pieceFieldFen :: Maybe PieceField -> Char
-pieceFieldFen Nothing = '1'
-pieceFieldFen (Just (PieceField piece color field)) = pieceChar
-    where   pieceChar = transformer pieceLetter
-            pieceLetter = (showPiece piece) !! 0
-            transformer 
-                | color == White = id
-                | color == Black = C.toLower
 
 piecesOnField :: Position -> Field -> Maybe PieceField
 piecesOnField ps f = safeIndex 0 (filter byField ps)
     where   byField pf = pf ^. pfField == f
 
-basicFenFromRow :: [PieceField] -> String
-basicFenFromRow ps = fmap (\c -> pieceFieldFen (firstPieceOnColumn ps c)) allColumns
-
-aggregateFen :: Int -> String -> String
-aggregateFen i = SU.replace (take i (repeat '1')) (show i)
-
-piecesOnRow :: Position -> Row -> Position
-piecesOnRow ps r = filter (\pf -> pf ^. pfField . fieldRow == r) ps
-
-firstPieceOnColumn :: Position -> Column -> Maybe PieceField
-firstPieceOnColumn ps c = safeIndex 0 (filter (\pf -> pf ^. pfField . fieldColumn == c) ps)
-
-positionByRow :: Position -> [Position]
-positionByRow ps = fmap (piecesOnRow ps) (reverse allRows)
-
-basicFen :: Position -> Fen
-basicFen ps = intercalate "/" $ fmap (aggregator . basicFenFromRow) $ positionByRow ps
-
-aggregator s = foldl (flip ($)) s (fmap aggregateFen (reverse [1..8]))
-
-gameStateToFen :: GameState -> Fen
-gameStateToFen gs@(GameState ps color cr ept hm fm) = intercalate " " elements
-  where elements = ["fen", positionFen, col, castleString, epString, show hm, show fm]
-        positionFen = basicFen ps
-        col = fmap C.toLower $ colorToString color 
-        castleString = castlingRightsToString cr
-        epString = epToString ept
-
-epToString :: Maybe Field -> String
-epToString (Just f) = fmap C.toLower $ showField f
-epToString Nothing = "-"
-
-fullFen :: Position -> Fen
-fullFen ps = "fen " ++ basicFen ps ++ " w - - 0 1"
-
-fenStringToPosition :: String -> Position
-fenStringToPosition s = catMaybes $ fmap stringToPieceField [p ++ f | (p, f) <- collected]
-    where
-         expanded = concat $ fmap asRepeated $ cleanFenString s
-         pieceStrings = fmap fenPieceFormatter expanded
-         collected = zip pieceStrings allFieldsForFen
-
-
-cleanFenString :: String -> String 
-cleanFenString = filter (not . (`elem` ("/"::String)))
-
-allFieldsForFen :: [String]
-allFieldsForFen = fmap show [Field c r | r <- reverse allRows, c <- allColumns]
-
-fenColorString :: Char -> Char
-fenColorString x
-  | x `elem` ['a'..'z'] = 'B'
-  | x `elem` ['A'..'Z'] = 'W'
-  | otherwise = ' '
-
-fenPieceFormatter :: Char -> String
-fenPieceFormatter x = (fenColorString x):[C.toUpper x]
-
-asRepeated :: Char -> String
-asRepeated x 
-  | x `elem` ['1'..'8'] = take (read [x] :: Int) (repeat '0')
-  | otherwise = [x]
-
-fenToGameState :: String -> Maybe GameState
-fenToGameState = EitherC.rightToMaybe . parseOnly parseFen . Te.pack
-
-parseFen :: Parser GameState
-parseFen = do
-  string "fen "
-  positionFen :: String <- many1' (letter <|> digit <|> (char '/'))
-  let position = fenStringToPosition positionFen
-  space
-  playerToMoveString :: Char <- (char 'w' <|> char 'b')
-  let playerToMove = fromJust $ colorString [C.toUpper playerToMoveString]
-  space
-  castlingRightsString :: String <- many1' (char 'K' <|> char 'Q' <|> char 'q' <|> char 'k' <|> char '-')
-  let castlingRights = castlingRightsParser castlingRightsString
-  optional space
-  epTargetString :: String <- many1' (letter <|> digit <|> char '-')
-  let epTarget = stringToField $ fmap C.toUpper epTargetString
-  space
-  halfMove :: Int <- decimal
-  space
-  fullMove :: Int <- decimal
-  endOfInput
-  return $ GameState position playerToMove castlingRights epTarget halfMove fullMove
-
-parseFen' :: Parser ()
-parseFen' = do
-  string "fen "
-  positionFen :: String <- many1' (letter <|> digit <|> (char '/'))
-  let position = fenStringToPosition positionFen
-  space
-  playerToMoveString :: Char <- (char 'w' <|> char 'b')
-  let playerToMove = fromJust $ colorString [C.toUpper playerToMoveString]
-  space
-  castlingRightsString :: String <- many1' (char 'K' <|> char 'Q' <|> char 'q' <|> char 'k' <|> char '-')
-  let castlingRights = castlingRightsParser castlingRightsString
-  -- optional space
-  -- epTargetString :: String <- many1' (letter <|> digit <|> char '-')
-  -- let epTarget = stringToField $ fmap C.toUpper epTargetString
-  return ()
-
-castlingRightsParser :: String -> CastlingRights
-castlingRightsParser s = PlayerData (CastlingData wk wq) (CastlingData bk bq)
-  where
-    wk = 'K' `elem` s
-    bk = 'k' `elem` s
-    wq = 'Q' `elem` s
-    bq = 'q' `elem` s
-
-castlingRightsToString :: CastlingRights -> String
-castlingRightsToString (PlayerData (CastlingData wk wq) (CastlingData bk bq)) = if length concatenated > 0 then concatenated else "-"
-  where wkC = castlingRightsChar wk White True
-        wqC = castlingRightsChar wq White False
-        bkC = castlingRightsChar bk Black True
-        bqC = castlingRightsChar bq Black False
-        values = [wkC, wqC, bkC, bqC]
-        concatenated = concat values
-
-castlingRightsChar :: Bool -> Color -> Bool -> String
-castlingRightsChar True White True = "K"
-castlingRightsChar True White False = "Q"
-castlingRightsChar True Black True = "k"
-castlingRightsChar True Black False = "q"
-castlingRightsChar False _ _ = ""
 
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
