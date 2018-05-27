@@ -48,6 +48,7 @@ import Chess.Logic
 import Chess.Helpers
 import Chess.Stockfish
 import Chess.Pgn.External as PgnExternal
+import Chess.Fen
 
 pgnToPromotion :: PgnMove -> (PgnMove, Maybe Piece)
 pgnToPromotion pgn
@@ -318,19 +319,27 @@ average xs = realToFrac (sum xs) / genericLength xs
 toPlayerEval :: [Int] -> PlayerEval
 toPlayerEval evals = PlayerEval $ round $ average evals
 
-data MoveSummary = MoveSummary {msMove :: Move, msMoveBest :: Move, evalMove :: Evaluation, evalBest :: Evaluation, msComparison :: Int} deriving Show
+data MoveSummary = MoveSummary {
+  msMove :: Move
+, msMoveBest :: Move
+, evalMove :: Evaluation
+, evalBest :: Evaluation
+, msComparison :: Int
+, msFen :: String
+} deriving Show
 
-ms :: Color -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
-ms col mv mvBest eval evalBest = MoveSummary mv mvBest eval evalBest compFull
-  where comp = (evaluationNumber eval) - (evaluationNumber evalBest) 
-        comparison = if col == White then (-comp) else comp
+ms :: GameState -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
+ms gs mv mvBest eval evalBest = MoveSummary mv mvBest eval evalBest compFull fen
+  where color = gs ^. gsColor
+        comp = (evaluationNumber eval) - (evaluationNumber evalBest) 
+        comparison = if color == White then (-comp) else comp
         compFull = if playedBest then 0 else min 0 comparison
         playedBest = mv == mvBest
+        fen = gameStateToFen gs
 
 formatBest :: [(Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]
 formatBest (first : second : rest) = (mvs, gs) : (formatBest (second:rest))
-  where mvs = ms col mv mvBest (sfEvaluation sf) (sfEvaluation sfAfter)
-        col = gs ^. gsColor
+  where mvs = ms gs mv mvBest (sfEvaluation sf) (sfEvaluation sfAfter)
         mvBest = sfMove sf
         (mv, sf, gs) = first
         (_, sfAfter, _) = second

@@ -16,12 +16,13 @@ import Data.Foldable (fold)
 
 type PgnMove = String
 
-data Result = WhiteWin | Draw | BlackWin | Undetermined deriving (Eq)
+data Result = WhiteWin | Draw | BlackWin deriving (Eq)
+
 resultReadValue :: String -> Result
 resultReadValue "1-0" = WhiteWin
 resultReadValue "0-1" = BlackWin
 resultReadValue "1/2-1/2" = Draw
-resultReadValue _ = Undetermined
+resultReadValue _ = Draw
 
 resultParser = do
   res <- string "1-0" <|> string "1/2-1/2" <|> string "0-1"
@@ -107,7 +108,6 @@ instance Show Result where
   show WhiteWin = "1"
   show BlackWin = "0"
   show Draw = "D"
-  show Undetermined = "?"
 
 data PgnTag = 
     PgnEvent String
