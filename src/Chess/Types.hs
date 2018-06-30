@@ -69,12 +69,12 @@ showPiece Bishop = "B"
 showPiece Pawn = "P"
 
 showColumn :: Column -> String
-showColumn c = [['A'..'H'] !! ((columnInt c) - 1)]
+showColumn c = [['A'..'H'] !! (columnInt c - 1)]
 
-allColumnNames :: [Char]
+allColumnNames :: String
 allColumnNames = fmap (head . showColumn) allColumns
 
-allRowNames :: [Char]
+allRowNames :: String
 allRowNames = fmap (head . showRow) allRows
 
 showRow :: Row -> String
@@ -84,7 +84,7 @@ showField :: Field -> String
 showField (Field c r) = showColumn c ++ showRow r
 
 rowInt :: Row -> Int
-rowInt r = (fromJust (elemIndex r allRows)) + 1
+rowInt r = fromJust (elemIndex r allRows) + 1
 
 intRow :: Int -> Maybe Row
 intRow i = safeIndex (i - 1) allRows
@@ -96,7 +96,7 @@ fieldToInt :: Field -> (Int, Int)
 fieldToInt (Field c r) = (columnInt c, rowInt r)
 
 columnInt :: Column -> Int
-columnInt c = (fromJust (elemIndex c allColumns)) + 1
+columnInt c = fromJust (elemIndex c allColumns) + 1
 
 -- The chess pieces, ordered by value (starting with the King)
 data Piece = King | Queen | Rook | Bishop | Knight | Pawn deriving (Enum, Eq, Ord)

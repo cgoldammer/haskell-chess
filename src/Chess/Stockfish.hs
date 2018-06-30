@@ -12,7 +12,7 @@ import Data.Attoparsec.Text (Parser, parseOnly, string, digit, char, space, lett
 import Data.Attoparsec.Combinator (many', choice)
 import Data.Char (toUpper)
 import Data.List (take, intercalate, sortOn)
-import Data.Maybe (catMaybes, fromJust)
+import Data.Maybe (catMaybes, fromJust, listToMaybe)
 import Data.Text (Text, pack, splitOn, isInfixOf)
 import Turtle (cd, shell, strict, input)
 import Data.Either.Combinators (rightToMaybe)
@@ -30,14 +30,14 @@ bestMoves fen moveTime number = do
   let arguments = fmap quoteString [fen, show moveTime, show number]
   let gs = fromJust $ fenToGameState fen
   let color = gs ^. gsColor
-  let command = pack $ intercalate " " $ "./bestmoves.sh" : arguments
+  let command = pack $ unwords $ "./bestmoves.sh" : arguments
   shell command empty
   moves <- readResults gs number
   let movesStandardized = if color == White then moves else fmap invertEval moves
   return movesStandardized
 
 singleBestMove :: Fen -> Int -> Int -> IO (Maybe StockfishMove)
-singleBestMove fen moveTime number = fmap safeHead $ bestMoves fen moveTime number
+singleBestMove fen moveTime number = listToMaybe <$> bestMoves fen moveTime number
 
 
 resultLines :: Int -> IO [Text]
@@ -45,7 +45,7 @@ resultLines number = do
   cd "/home/cg/haskell-chess/scripts/"
   results :: Text <- strict $ input "./results.txt"
   let lines =  splitOn "\n" results
-  let filt = \t -> not $ (pack "upperbound") `isInfixOf` t
+  let filt t = not $ pack "upperbound" `isInfixOf` t
   return $ filter filt lines
 
 readResults :: GameState -> Int -> IO [StockfishMove]
@@ -54,7 +54,7 @@ readResults gs number = do
   return $ readMoves gs lines number
 
 readMoves :: GameState -> [Text] -> Int -> [StockfishMove]
-readMoves gs t number = reverse $ sortOn sortMove $ catMaybes $ fmap (rightToMaybe . parser) $ lastLines
+readMoves gs t number = reverse $ sortOn sortMove $ catMaybes $ (rightToMaybe . parser) <$> lastLines
   where   lastLines = Data.List.take number $ tail . tail $ reverse t 
           parser = parseOnly (stockfishLineParser gs)
 
@@ -119,7 +119,7 @@ stockfishLineParser gs = do
     many' digit
     string " multipv "
     pvString <- many' digit
-    let pvNumber = (read pvString) :: Int
+    let pvNumber = read pvString :: Int
     string " score " 
     eval <- choice [mateParser, centipawnParser]
     string " nodes "

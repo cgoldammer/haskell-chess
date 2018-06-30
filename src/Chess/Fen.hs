@@ -1,6 +1,6 @@
 module Chess.Fen (parseFen, fenToGameState, gameStateToFen, castlingRightsParser, fenStringToPosition, fullFen) where
 
-import Data.Attoparsec.Text (Parser, takeWhile, string, digit, char, letter, space, endOfLine, skipWhile, takeTill, satisfy, inClass)
+import Data.Attoparsec.Text (Parser, takeWhile, string, digit, char, letter, space, endOfLine, skipWhile, takeTill, satisfy, inClass, decimal, parseOnly)
 import Data.Attoparsec.Combinator (many1', endOfInput)
 import Data.Either.Combinators (rightToMaybe)
 import Data.Char (toUpper, toLower)
@@ -9,7 +9,6 @@ import Data.List (partition, intercalate)
 import Data.Maybe (fromJust, Maybe(..), catMaybes, isJust)
 import Data.Foldable (fold, foldMap)
 import Control.Applicative (liftA2, (<|>), optional)
-import Data.Attoparsec.Text (Parser, parseOnly, string, letter, digit, char, space, decimal)
 import Control.Lens (makeLenses, view, (^.), over)
 import Data.Text (pack)
 
@@ -23,27 +22,27 @@ pieceFieldFen :: Maybe PieceField -> Char
 pieceFieldFen Nothing = '1'
 pieceFieldFen (Just (PieceField piece color field)) = pieceChar
     where   pieceChar = transformer pieceLetter
-            pieceLetter = (showPiece piece) !! 0
+            pieceLetter = head $ showPiece piece
             transformer 
                 | color == White = id
                 | color == Black = toLower
 
 basicFenFromRow :: [PieceField] -> String
-basicFenFromRow ps = fmap (\c -> pieceFieldFen (firstPieceOnColumn ps c)) allColumns
+basicFenFromRow ps = fmap (pieceFieldFen . firstPieceOnColumn ps) allColumns
 
 aggregateFen :: Int -> String -> String
-aggregateFen i = replace (take i (repeat '1')) (show i)
+aggregateFen i = replace (replicate i '1') (show i)
 
 basicFen :: Position -> Fen
-basicFen ps = intercalate "/" $ fmap (aggregator . basicFenFromRow) $ positionByRow ps
+basicFen ps = intercalate "/" $ (aggregator . basicFenFromRow) <$> positionByRow ps
 
 aggregator s = foldl (flip ($)) s (fmap aggregateFen (reverse [1..8]))
 
 gameStateToFen :: GameState -> Fen
-gameStateToFen gs@(GameState ps color cr ept hm fm) = intercalate " " elements
+gameStateToFen gs@(GameState ps color cr ept hm fm) = unwords elements
   where elements = ["fen", positionFen, col, castleString, epString, show hm, show fm]
         positionFen = basicFen ps
-        col = fmap toLower $ colorToString color 
+        col = toLower <$> colorToString color 
         castleString = castlingRightsToString cr
         epString = epToString ept
 
@@ -54,7 +53,7 @@ fullFen ps = "fen " ++ basicFen ps ++ " w - - 0 1"
 fenStringToPosition :: String -> Position
 fenStringToPosition s = catMaybes $ fmap stringToPieceField [p ++ f | (p, f) <- collected]
     where
-         expanded = concat $ fmap asRepeated $ cleanFenString s
+         expanded = concatMap asRepeated $ cleanFenString s
          pieceStrings = fmap fenPieceFormatter expanded
          collected = zip pieceStrings allFieldsForFen
 
@@ -72,7 +71,7 @@ fenColorString x
   | otherwise = ' '
 
 fenPieceFormatter :: Char -> String
-fenPieceFormatter x = (fenColorString x):[toUpper x]
+fenPieceFormatter x = fenColorString x:[toUpper x]
 
 -- The main logic for parsing a FEN string into a gamestate
 parseFen :: Parser GameState
@@ -81,7 +80,7 @@ parseFen = do
   positionFen :: String <- many1' $ fold [letter, digit, char '/']
   let position = fenStringToPosition positionFen
   space
-  playerToMoveString :: Char <- (char 'w' <|> char 'b')
+  playerToMoveString :: Char <- char 'w' <|> char 'b'
   let playerToMove = fromJust $ colorString [toUpper playerToMoveString]
   space
   castlingRightsString :: String <- many1' $ foldMap char ("KQkq-" :: String)
@@ -101,7 +100,7 @@ castlingRightsParser s = PlayerData (CastlingData wK wQ) (CastlingData bK bQ)
   where [wK, bK, wQ, bQ] = fmap (`elem` s) "KkQk"
 
 castlingRightsToString :: CastlingRights -> String
-castlingRightsToString (PlayerData (CastlingData wk wq) (CastlingData bk bq)) = if length concatenated > 0 then concatenated else "-"
+castlingRightsToString (PlayerData (CastlingData wk wq) (CastlingData bk bq)) = if not (null concatenated) then concatenated else "-"
   where wkC = castlingRightsChar wk White True
         wqC = castlingRightsChar wq White False
         bkC = castlingRightsChar bk Black True
@@ -123,12 +122,12 @@ positionByRow :: Position -> [Position]
 positionByRow ps = fmap (piecesOnRow ps) (reverse allRows)
 
 epToString :: Maybe Field -> String
-epToString (Just f) = fmap toLower $ showField f
+epToString (Just f) = toLower <$> showField f
 epToString Nothing = "-"
 
 asRepeated :: Char -> String
 asRepeated x 
-  | x `elem` ['1'..'8'] = take (read [x] :: Int) (repeat '0')
+  | x `elem` ['1'..'8'] = replicate (read [x] :: Int) '0'
   | otherwise = [x]
 
 fenToGameState :: String -> Maybe GameState

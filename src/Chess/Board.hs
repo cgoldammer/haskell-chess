@@ -73,17 +73,17 @@ showColor :: Color -> String
 showColor White = "W"
 showColor Black = "B"
 
-allColumnNames :: [Char]
+allColumnNames :: String
 allColumnNames = fmap (head . showColumn) allColumns
 
-allRowNames :: [Char]
+allRowNames :: String
 allRowNames = fmap (head . showRow) allRows
 
 charColumn :: Char -> Maybe Column
-charColumn c = join $ fmap (flip safeIndex allColumns) (elemIndex c ['A'..'H'])
+charColumn c = join $ fmap (`safeIndex`allColumns) (elemIndex c ['A'..'H'])
 
 charRow :: Char -> Maybe Row
-charRow r = join $ fmap (flip safeIndex allRows) (elemIndex r ['1'..'8'])
+charRow r = join $ fmap (`safeIndex`allRows) (elemIndex r ['1'..'8'])
 
 stringToPiece :: String -> Maybe Piece
 stringToPiece "K" = Just King
@@ -115,7 +115,7 @@ stringToPieceField [colS, pieceS, cS, rS]
             piece = stringToPiece [pieceS]
             c = charColumn cS
             r = charRow rS
-            allPresent = (isJust col) && (isJust piece) && (isJust c) && (isJust r)
+            allPresent = isJust col && isJust piece && isJust c && isJust r
 
 stringToPosition :: [String] -> Maybe Position
 stringToPosition = traverse stringToPieceField
@@ -124,7 +124,7 @@ invertColor White = Black
 invertColor Black = White
 
 flipRow :: Row -> Row
-flipRow row = fromJust $ intRow $ 9 - (rowInt row)
+flipRow row = fromJust $ intRow $ 9 - rowInt row
 
 flipField :: Field -> Field
 flipField (Field column row) = Field column (flipRow row)

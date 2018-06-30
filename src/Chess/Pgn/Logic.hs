@@ -24,7 +24,6 @@ module Chess.Pgn.Logic (
   , gameText, readGameText
   , unsafeMoves
   , splitIntoGames
-  , BlunderThreshold
   , GameEvaluation(..)
   , getGames, getGamesFromText
   , allPgnsForMove, moveAsPgn, allOtherPgns
@@ -54,13 +53,13 @@ import Chess.Fen
 
 pgnToPromotion :: PgnMove -> (PgnMove, Maybe Piece)
 pgnToPromotion pgn
-  | (end `elem` ("QNBR" :: String)) = (init pgn, stringToPiece [end])
+  | end `elem` ("QNBR" :: String) = (init pgn, stringToPiece [end])
   | otherwise = (pgn, Nothing)
   where end = last pgn
         secondToLast = head $ tail pgn
 
 isPromotionMove :: Move -> Bool
-isPromotionMove (PromotionMove _ _ _) = True
+isPromotionMove PromotionMove{} = True
 isPromotionMove _ = False
 
 renameCastles :: PgnMove -> Color -> PgnMove
@@ -75,7 +74,7 @@ possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
     where   allMoves = filter ((==movePiece) . fst) $ allNextLegalMoves gs
             pgnCleaned = renameCastles (filter filterMoves pgn) color -- PgnMove
             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
-            relevantMoves = filter (if (isJust promotionPiece) then (isPromotionMove . snd) else (not . isPromotionMove. snd)) allMoves
+            relevantMoves = filter (if isJust promotionPiece then isPromotionMove . snd else not . isPromotionMove. snd) allMoves
             targetField = pgnToTargetField pgnWithoutPromotion
             movePiece = pgnPiece pgnWithoutPromotion
             color = gs ^. gsColor
@@ -96,13 +95,11 @@ cleanPgn pgn color = withoutPromotion
 
 pgnPiece :: PgnMove -> Piece
 pgnPiece pgnMove
-  | head pgnMove `elem` ("KQRNB" :: String) = fromJust $ stringToPiece $ [head pgnMove]
+  | head pgnMove `elem` ("KQRNB" :: String) = fromJust $ stringToPiece [head pgnMove]
   | otherwise = Pawn
 
 createPgnMoves :: GameState -> [(Move, PieceField)] -> [[PgnMove]]
-createPgnMoves gs ls = fmap (uncurry expander) ls
-  where expander mv pf = expandMove gs mv pf
-
+createPgnMoves gs ls = uncurry (expandMove gs) <$> ls
 
 
 expandMove :: GameState -> Move -> PieceField -> [PgnMove]
@@ -115,7 +112,7 @@ expandMove gs mv pf = expanded
             isMated = isCheck && isMate newState
             isCheckNotMate = isCheck && not isMated
             isEp = Just (mv ^. moveTo) == (gs ^. gsEnPassantTarget) && piece == Pawn
-            isTake = (isTaking gs (mv ^. moveTo)) || isEp
+            isTake = isTaking gs (mv ^. moveTo) || isEp
             moveHelper = moveToPgn isMated isCheckNotMate isTake
             expandedFull = [withNeither, withColumn, withRow, withBoth]
             expanded = case () of _
@@ -132,7 +129,7 @@ convertPgnTypeToBools WithRow = (False, True)
 convertPgnTypeToBools WithBoth = (True, True)
 
 moveToPgn :: Bool -> Bool -> Bool -> PgnType -> Move -> PieceField -> PgnMove
-moveToPgn isMate isCheck isTake pgnType mv pf = uncurry helper $ bools
+moveToPgn isMate isCheck isTake pgnType mv pf = uncurry helper bools
   where helper = moveToPgnHelper isMate isCheck isTake mv pf 
         bools = convertPgnTypeToBools pgnType
 
@@ -141,7 +138,7 @@ promotionString (PromotionMove _ _ piece) = Just $ showPiece piece
 promotionString _ = Nothing
 
 moveToPgnHelper :: Bool -> Bool -> Bool -> Move -> PieceField -> Bool -> Bool -> PgnMove
-moveToPgnHelper isMate isCheck _ cm@(CastlingMove _ _ _ _) _ _ _ = concat $ catMaybes [Just (show cm), makeMaybe isMate "#", makeMaybe isCheck "+"]
+moveToPgnHelper isMate isCheck _ cm@CastlingMove{} _ _ _ = concat $ catMaybes [Just (show cm), makeMaybe isMate "#", makeMaybe isCheck "+"]
 moveToPgnHelper isMate isCheck isTake mv pf withColumn withRow = concat $ catMaybes values
   where
     pieceString = pgnPieceChar $ pf ^. pfPiece
@@ -151,7 +148,7 @@ moveToPgnHelper isMate isCheck isTake mv pf withColumn withRow = concat $ catMay
     takeString = makeMaybe isTake "x"
     checkString = makeMaybe isCheck "+"
     mateString = makeMaybe isMate "#"
-    promoteString = fmap ('=':) $ promotionString mv
+    promoteString = ('=':) <$> promotionString mv
     values = [Just pieceString, makeMaybe withColumn columnString, makeMaybe withRow rowString, takeString, Just targetString, promoteString, checkString, mateString]
 
 
@@ -173,7 +170,7 @@ addNumbers s = concat [ show num ++ "." ++ move | (num, move) <- zipped]
 splitPaired s = splitIntoPairs s []
 
 splitIntoPairs (a:b:rest) accum = accum ++ ((a ++ " " ++ b ++ " ") : splitIntoPairs rest accum)
-splitIntoPairs (a:[]) accum = accum ++ [a]
+splitIntoPairs [a] accum = accum ++ [a]
 splitIntoPairs [] accum = accum
 
 nextPgnMove :: (GameState, [PgnMove]) -> Move -> (GameState, [PgnMove])
@@ -185,7 +182,7 @@ nextPgnMove (gs, pgnMoves) mv = (gs', pgnMoves ++ [pgnMove])
 -- Find possible moves and piecefields for all other pieces
 -- Use the first pgnMove that's not in the other moves
 moveAsPgn :: GameState -> Move -> PgnMove
-moveAsPgn gs mv = head $ [pgnM | pgnM <- allPgns, not (pgnM `elem` allOther)]
+moveAsPgn gs mv = head [pgnM | pgnM <- allPgns, pgnM `notElem` allOther]
   where allOther = allOtherPgns gs mv
         allPgns = allPgnsForMove gs mv
 
@@ -198,7 +195,7 @@ allPgnsForMove gs mv = expandMove gs mv pieceField
         newState = move gs piece mv
 
 allOtherPgns :: GameState -> Move -> [PgnMove]
-allOtherPgns gs mv = concat $ fmap (uncurry (flip (expandMove gs))) allMovesWithPieceFields
+allOtherPgns gs mv = concatMap (uncurry (flip (expandMove gs))) allMovesWithPieceFields
   where piece = movePiece gs mv
         color = gs ^. gsColor
         from = mv ^. moveFrom
@@ -234,7 +231,7 @@ readGameText :: String -> IO Text
 readGameText fp = strict $ input $ fromText $ pack fp
 
 gameText :: String -> Int -> IO [Text]
-gameText fp num = fmap ((Data.List.take num) . splitIntoGames) $ readGameText fp
+gameText fp num = (Data.List.take num . splitIntoGames) <$> readGameText fp
 
 splitIntoGames :: Text -> [Text]
 splitIntoGames text = fmap Text.concat [[needle, t] | t <- tail (splitOn needle text)]
@@ -257,7 +254,7 @@ parseGame tags moves = gameParser game
 
 
 getGamesFromText :: Text -> [ParsedGame]
-getGamesFromText text = fmap readSingleGame $ splitIntoGames text
+getGamesFromText text = readSingleGame <$> splitIntoGames text
   
 getGames :: String -> Int -> IO [ParsedGame]
 getGames fp num = do
@@ -284,10 +281,8 @@ gameSummaries g = do
   print $ length gameStates
   bestMoves <- bestStockfishMoves gameStates 
   -- print ("gameSummaries" ++ (show bestMoves)) 
-  let zipped = zip bestMoves ((fmap Just moves) ++ [Nothing])
-  return $ gameEvalSummary $ [(mv, sfm, gs) | ((sfm, gs), mv) <- zipped]
-  
-type BlunderThreshold = Int
+  let zipped = zip bestMoves (fmap Just moves ++ [Nothing])
+  return $ gameEvalSummary [(mv, sfm, gs) | ((sfm, gs), mv) <- zipped]
 
 bestStockfishMoves:: [GameState] -> IO [(Maybe StockfishMove, GameState)]
 bestStockfishMoves states = do
@@ -297,7 +292,7 @@ bestStockfishMoves states = do
 gameEvalSummary :: [(Maybe Move, Maybe StockfishMove, GameState)] -> [MoveSummary]
 gameEvalSummary summ = fmap fst $ formatBest $ keepOnlyJust summ
 
-keepOnlyJust summ = fmap (\(m, sfm, gs) -> (m, fromJust sfm, gs)) $ Data.List.takeWhile (\(_, sfm, gs) -> isJust sfm) summ
+keepOnlyJust summ = (\(m, sfm, gs) -> (m, fromJust sfm, gs)) <$> Data.List.takeWhile (\(_, sfm, gs) -> isJust sfm) summ
 
 tagSummary :: PgnTag -> Maybe String
 tagSummary (PgnWhite player) = Just $ lastName player
@@ -310,8 +305,8 @@ type GameEval = (PlayerEval, PlayerEval)
 
 evalSummary :: [(Color, Int)] -> GameEval
 evalSummary evals = (evalWhite, evalBlack)
-  where evalWhite = toPlayerEval $ fmap snd $ (filter ((==White) . fst)) evals
-        evalBlack = toPlayerEval $ fmap snd $ (filter ((==Black) . fst)) evals
+  where evalWhite = toPlayerEval $ snd <$> filter ((==White) . fst) evals
+        evalBlack = toPlayerEval $ snd <$> filter ((==Black) . fst) evals
 
 average xs = realToFrac (sum xs) / genericLength xs
 
@@ -336,7 +331,7 @@ ms gs mv mvBest eval evalBest = MoveSummary mvString mvBestString eval evalBest 
 
 withLag :: [a] -> [(a, a)]
 withLag [] = []
-withLag (_ : []) = []
+withLag [_] = []
 withLag (x1:x2:rest) = (x1, x2) : withLag (x2 : rest)
 
 format :: (Maybe Move, StockfishMove, GameState) -> (Maybe Move, StockfishMove, GameState) -> Maybe (MoveSummary, GameState)

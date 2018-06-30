@@ -7,12 +7,13 @@
 -- that I could parse PGNs as exported by Chessbase, chess.com, and external sites.
 module Chess.Pgn.External where
 
-import Control.Monad (replicateM)
+import Control.Monad (replicateM, replicateM_)
 import Data.Attoparsec.Text (Parser, takeWhile, string, digit, char, letter, space, endOfLine, skipWhile, takeTill, satisfy, inClass)
 import Data.Attoparsec.Combinator (many', option, many1')
 import Data.Text as Te (Text, pack, unpack)
 import Control.Applicative ((<|>))
 import Data.Foldable (fold)
+import Data.Maybe (fromMaybe)
 
 type PgnMove = String
 
@@ -45,7 +46,7 @@ nameParser :: Parser Player
 nameParser = do
   last <- namePartParser
   first :: Maybe String <- option Nothing (Just <$> firstNameParser)
-  return $ Player (maybe "" id first) last
+  return $ Player (fromMaybe "" first) last
 
 nameParse = letter <|> char ',' <|> space
 
@@ -59,13 +60,13 @@ tagParse tagName p = do
   endOfLine
   return content
 
-eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ fmap unpack $ Data.Attoparsec.Text.takeWhile (/= '\"')
+eventParse :: Parser PgnTag = fmap PgnEvent $ tagParse "Event" $ unpack <$> Data.Attoparsec.Text.takeWhile (/= '\"')
 siteParse :: Parser PgnTag = fmap PgnSite $ tagParse "Site" $ many' $ letter <|> space
 dateParse :: Parser PgnTag = fmap PgnDate $ tagParse "Date" $ many' $ digit <|> char '.'
 roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' digit
-whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
-blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
-resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" $ resultParser
+whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" nameParser
+blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" nameParser
+resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" resultParser
 whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many1' digit
 blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many1' digit
 
@@ -85,9 +86,7 @@ fullTagParse =  eventParse
             <|> otherParse
 
 parseAllTags :: Parser [PgnTag]
-parseAllTags = do
-  tags <- many' fullTagParse
-  return tags
+parseAllTags = many' fullTagParse
 
 otherParse :: Parser PgnTag
 otherParse = do
@@ -95,7 +94,7 @@ otherParse = do
   tagName <- many' letter
   space
   char '"'
-  event :: Text <- Data.Attoparsec.Text.takeWhile (\c -> c /='\"')
+  event :: Text <- Data.Attoparsec.Text.takeWhile (/='\"')
   string "\"]"
   endOfLine
   return $ PgnOther tagName (unpack event)
@@ -188,7 +187,7 @@ sidelineParser = do
   takeTill (\c -> c `elem` ("()"::String))
   many' sidelineParser
   let maxNumberOfParentheses = 10
-  replicateM maxNumberOfParentheses insideParser -- This is a hack - we're limiting at finding 10 sidelines
+  replicateM_ maxNumberOfParentheses insideParser -- This is a hack - we're limiting at finding 10 sidelines
   takeTill (\c -> c `elem` ("()"::String))
   char ')'
   return ()
@@ -203,7 +202,7 @@ singleMoveParser :: Parser String
 singleMoveParser = do
   many' space
   first <- satisfy $ inClass $ ['a'..'h'] ++ "KNBQRO"
-  rest <- many1' $ fold $ [letter, digit] ++ fmap char ("#x+=O-")
+  rest <- many1' $ fold $ [letter, digit] ++ fmap char "#x+=O-"
   many' dollarParser
   many' $ sidelineParser <|> commentParser
   return $ first : rest
@@ -211,7 +210,7 @@ singleMoveParser = do
 moveParser = bothMoveParser <|> whiteMoveParser
 
 filterMoves :: Char -> Bool
-filterMoves c = not $ c `elem` ("x#+=" :: String)
+filterMoves c = c `notElem` ("x#+=" :: String)
 
 parseGameMoves :: Parser [PgnMove]
 parseGameMoves = do

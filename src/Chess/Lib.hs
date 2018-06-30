@@ -31,7 +31,7 @@ import Data.Aeson
 import qualified Turtle as Tu
 
 mateFromGameState :: GameState -> IO [MateMove]
-mateFromGameState = mateFinder . fullFen . (view gsPosition)
+mateFromGameState = mateFinder . fullFen . view gsPosition
 
 -- resultsString :: [GameState] -> [[MateMove]] -> String
 -- resultsString gs mates = U.toString $ encode printable
@@ -48,7 +48,7 @@ instance ToJSON PositionMates where
         "best" .= show (bestMove mm (minimum (fmap snd mm)))]
     
 bestMove :: [MateMove] -> Int -> Move
-bestMove mm num = fst $ head $ filter (\m -> ((snd m) == num)) mm
+bestMove mm num = fst $ head $ filter ((==num) . snd) mm
 
 -- filterMates :: [MateMove] -> Bool
 -- filterMates mm = length mm > 0 && numberMin == 1 && minNumber >= 1 && minNumber <= 5
