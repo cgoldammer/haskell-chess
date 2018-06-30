@@ -2,6 +2,7 @@
 -- A PgnGame consists of both a `Game` and a list of game tags
 -- and it represents the full logic of the PGN in a structured format.
 
+
 module Chess.Pgn.Logic (
     pgnToMove, cleanPgn --, -- pgnAsMoves
   , PgnType (Standard, WithColumn, WithRow, WithBoth)
@@ -42,6 +43,7 @@ import qualified Data.Text as Text (concat)
 import Data.Either.Combinators (rightToMaybe)
 import Filesystem.Path.CurrentOS (fromText)
 import Turtle (strict, input)
+import Debug.Trace (traceShow)
 
 import Chess.Board
 import Chess.Logic
@@ -278,24 +280,21 @@ filterForBlunders = undefined
 gameSummaries :: Game -> IO [MoveSummary]
 gameSummaries g = do 
   let moves = gameMoves g
-  let gameStates = scanl move' (startingGameState g) moves
-  bestMoves <- bestStockfishMoves$ zip gameStates moves
-  return $ gameEvalSummary bestMoves
+  let gameStates = traceShow moves $ scanl move' (startingGameState g) moves
+  print $ length gameStates
+  bestMoves <- bestStockfishMoves gameStates 
+  -- print ("gameSummaries" ++ (show bestMoves)) 
+  let zipped = zip bestMoves ((fmap Just moves) ++ [Nothing])
+  return $ gameEvalSummary $ [(mv, sfm, gs) | ((sfm, gs), mv) <- zipped]
   
 type BlunderThreshold = Int
 
-bestStockfishMoves:: [(GameState, Move)] -> IO [(Move, Maybe StockfishMove, GameState)]
-bestStockfishMoves positionsRaw = do
-  let numberMoves = length positionsRaw
-  let (start, end) = interestingRange numberMoves
-  let (start, end) = (0, numberMoves)
-  let positions = slice start end positionsRaw
-  let mvs = fmap snd positions
-  let states = fmap fst positions
+bestStockfishMoves:: [GameState] -> IO [(Maybe StockfishMove, GameState)]
+bestStockfishMoves states = do
   bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) 100 1) states
-  return $ zip3 mvs bests states
+  return $ zip bests states
 
-gameEvalSummary :: [(Move, Maybe StockfishMove, GameState)] -> [MoveSummary]
+gameEvalSummary :: [(Maybe Move, Maybe StockfishMove, GameState)] -> [MoveSummary]
 gameEvalSummary summ = fmap fst $ formatBest $ keepOnlyJust summ
 
 keepOnlyJust summ = fmap (\(m, sfm, gs) -> (m, fromJust sfm, gs)) $ Data.List.takeWhile (\(_, sfm, gs) -> isJust sfm) summ
@@ -311,8 +310,8 @@ type GameEval = (PlayerEval, PlayerEval)
 
 evalSummary :: [(Color, Int)] -> GameEval
 evalSummary evals = (evalWhite, evalBlack)
-  where evalWhite = toPlayerEval $ fmap snd $ (filter (\e -> fst e == White)) evals
-        evalBlack = toPlayerEval $ fmap snd $ (filter (\e -> fst e == Black)) evals
+  where evalWhite = toPlayerEval $ fmap snd $ (filter ((==White) . fst)) evals
+        evalBlack = toPlayerEval $ fmap snd $ (filter ((==Black) . fst)) evals
 
 average xs = realToFrac (sum xs) / genericLength xs
 
@@ -320,27 +319,30 @@ toPlayerEval :: [Int] -> PlayerEval
 toPlayerEval evals = PlayerEval $ round $ average evals
 
 data MoveSummary = MoveSummary {
-  msMove :: Move
-, msMoveBest :: Move
+  msMove :: String
+, msMoveBest :: String
 , evalMove :: Evaluation
 , evalBest :: Evaluation
-, msComparison :: Int
 , msFen :: String
 } deriving Show
 
 ms :: GameState -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
-ms gs mv mvBest eval evalBest = MoveSummary mv mvBest eval evalBest compFull fen
+ms gs mv mvBest eval evalBest = MoveSummary mvString mvBestString eval evalBest fen
   where color = gs ^. gsColor
-        comp = (evaluationNumber eval) - (evaluationNumber evalBest) 
-        comparison = if color == White then (-comp) else comp
-        compFull = if playedBest then 0 else min 0 comparison
         playedBest = mv == mvBest
         fen = gameStateToFen gs
+        mvString = moveAsPgn gs mv
+        mvBestString = moveAsPgn gs mvBest
 
-formatBest :: [(Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]
-formatBest (first : second : rest) = (mvs, gs) : (formatBest (second:rest))
-  where mvs = ms gs mv mvBest (sfEvaluation sf) (sfEvaluation sfAfter)
-        mvBest = sfMove sf
-        (mv, sf, gs) = first
-        (_, sfAfter, _) = second
-formatBest _ = []
+withLag :: [a] -> [(a, a)]
+withLag [] = []
+withLag (_ : []) = []
+withLag (x1:x2:rest) = (x1, x2) : withLag (x2 : rest)
+
+format :: (Maybe Move, StockfishMove, GameState) -> (Maybe Move, StockfishMove, GameState) -> Maybe (MoveSummary, GameState)
+format (Just mv, sf, gs) (_, sfAfter, _) = Just (mvs, gs)
+  where mvs = ms gs mv (sfMove sf) (sfEvaluation sfAfter) (sfEvaluation sf) 
+format _ _ = Nothing
+
+formatBest :: [(Maybe Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]
+formatBest = catMaybes . fmap (uncurry format) . withLag 

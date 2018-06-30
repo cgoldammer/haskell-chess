@@ -35,6 +35,7 @@ firstNameParser = do
   string ", "
   namePartParser
 
+
 -- In PGNs, names for over-the-board games are provided in the form of lastname, firstname.
 -- However, in online games, it's usual to just report the username. So we parse the name
 -- into a mandatory last name (everything before a comma) and an optional first name
@@ -65,8 +66,8 @@ roundParse :: Parser PgnTag = fmap (PgnRound . read) $ tagParse "Round" $ many' 
 whitePlayerParse :: Parser PgnTag = fmap PgnWhite $ tagParse "White" $ nameParser
 blackPlayerParse :: Parser PgnTag = fmap PgnBlack $ tagParse "Black" $ nameParser
 resultParse :: Parser PgnTag = fmap PgnResult $ tagParse "Result" $ resultParser
-whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many' digit
-blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many' digit
+whiteEloParse :: Parser PgnTag = fmap (PgnWhiteElo . read) $ tagParse "WhiteElo" $ many1' digit
+blackEloParse :: Parser PgnTag = fmap (PgnBlackElo . read) $ tagParse "BlackElo" $ many1' digit
 
 
 -- | The full set of possible tags. The `otherParse` is a catch-all, and everything
