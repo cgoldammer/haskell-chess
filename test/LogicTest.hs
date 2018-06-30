@@ -140,6 +140,13 @@ testCastleBothBlack = TestCase $ assertEqual error (S.fromList movesExpected) in
           movesExpected = catMaybes $ fmap (stringToMove gsCastleBothBlack) ["E8C8", "E8G8"]
 
 
+-- castleDestroyedData = [("A1D1", CastlingData True False), ("H1H2", CastlingData False True)]
+-- testCastleDestroyed move expectedState = TestCase $ assertEqual error expectedState actualState
+--   where error = "Moving a rook should destroy castling rights on that side"
+--         gsNew = 
+    
+
+
 -- after white castles kingside (queenside), the rook is on f1 (c1)
 testRookField mv expectedField = TestCase $ assertEqual error (S.fromList expectedFields) intersection
     where error = "Rook expected on: "
@@ -178,17 +185,18 @@ testCastleQueen = TestCase $ assertEqual error (S.fromList movesExpected) inters
           possible = fmap snd $ allNextLegalMoves gsCastleQueen
           movesExpected = fmap snd $ catMaybes $ fmap (stringToMove gsCastleQueen) ["E1C1"]
 
-testLosesRight mvs mvExpected = TestCase $ assertEqual error (S.fromList movesExpected) intersection
+testLosesRight mvs mvExpected = TestCase $ assertEqual error movesExpected difference
   where error = "Check that some castling rights are lost after moving: " ++ show mvs
-        movesExpected = fmap snd $ catMaybes $ fmap (stringToMove gsCastleBoth) mvExpected
-        intersection = intersect possible movesExpected
-        possible = fmap snd $ allNextLegalMoves newState
+        movesExpected = S.fromList $ catMaybes $ fmap (stringToMove gsCastleBoth) mvExpected
+        difference = S.difference movesBefore movesAfter
+        movesAfter = S.fromList $ allNextLegalMoves newState
+        movesBefore = S.fromList $ allNextLegalMoves gsCastleBoth
         newState = newStateFromMoves gsCastleBoth mvs
 
 testsLosesRight = [
-    testLosesRight ["E1F1", "G8F8", "F1E1", "F8G8"] []
-  , testLosesRight ["A1A2", "G8F8", "A2A1", "F8G8"] ["E1G1"]
-  , testLosesRight ["H1H2", "G8F8", "H2H1", "F8G8"] ["E1C1"]]
+    testLosesRight ["E1F1", "G8F8", "F1E1", "F8G8"] ["E1G1", "E1C1"]
+  , testLosesRight ["A1A2", "G8F8", "A2A1", "F8G8"] ["E1C1"]
+  , testLosesRight ["H1H2", "G8F8", "H2H1", "F8G8"] ["E1G1"]]
     
 -- After a promotion, the initial pawn disappears
 stringToGs = toGameStateNoCastle . fromJust . stringToPosition

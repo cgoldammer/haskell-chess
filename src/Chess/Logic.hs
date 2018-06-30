@@ -152,6 +152,7 @@ getPositionChangeHelper gs Pawn (EnPassantMove from to pawnCapturedField) = (rem
         color = gs ^. gsColor
         removePf = [from, pawnCapturedField]
         addPf = [PieceField Pawn color to]
+getPositionChangeHelper _ _ _ = ([], [])
 
 -- |The interface to update a position. This has almost the same as
 -- getPositionChangeHelper, except that pieces that are taken are removed.
@@ -192,8 +193,12 @@ move gs piece mv = GameState newPosition newColor newCastlingRights newEnPassant
           newPosition = (uncurry (updatePosition oldPosition)) $ getPositionChange gs piece mv
           newHalfMove = updateHalfMove gs mv (gs ^. gsHalfMove)
           newFullMove = updateFullMove oldColor (gs ^. gsFullMove)
-          newCastlingRights = updateCastlingRights mv (gs ^. gsCastlingRights)
+          newCastlingRights = updateCastling oldColor mv (gs ^. gsCastlingRights)
           newEnPassant = updateEnPassant gs mv
+
+updateCastling :: Color -> Move -> CastlingRights -> CastlingRights
+updateCastling White mv (PlayerData w b) = PlayerData (updateCastlingRights White mv w) b
+updateCastling Black mv (PlayerData w b) = PlayerData w (updateCastlingRights White mv w)
 
 -- |Based on a `GameState`, a piece and a move, return a new `GameState`.
 -- Conceptually, this is the central function for this library, because it encapsulates
@@ -243,15 +248,18 @@ nextRow r Black = intRow $ (rowInt r) - 1
 updatePlayerCastlingData :: CastlingData Bool -> CastlingData Bool -> CastlingData Bool
 updatePlayerCastlingData (CastlingData kBefore qBefore) (CastlingData kNow qNow) = CastlingData (kBefore && kNow) (qBefore && qNow)
 
-updateCastlingRights :: Move -> CastlingRights -> CastlingRights
-updateCastlingRights (CastlingMove from to rookFrom rookTo) castlingRights = newRights
-  where fields = [(e1, h1), (e1, a1), (e8, h8), (e8, a8)]
-        [wK, wQ, bK, bQ] = fmap (\(f1, f2) -> not (from == f1 && rookFrom == f2)) fields
-        PlayerData castlingWhite castlingBlack = castlingRights
-        newDataWhite = updatePlayerCastlingData castlingWhite (CastlingData wK wQ)
-        newDataBlack = updatePlayerCastlingData castlingBlack (CastlingData bK bQ)
-        newRights = PlayerData newDataWhite newDataBlack
-updateCastlingRights _ castlingRights = castlingRights
+updateCastlingRights :: Color -> Move -> CastlingData Bool -> CastlingData Bool
+updateCastlingRights _ _ (CastlingData False False) = CastlingData False False
+updateCastlingRights White (StandardMove fromField _) (CastlingData k q)
+  | fromField == a1 = CastlingData k False
+  | fromField == e1 = CastlingData False False
+  | fromField == h1 = CastlingData False q
+updateCastlingRights Black (StandardMove fromField _) (CastlingData k q)
+  | fromField == a8 = CastlingData k False
+  | fromField == e8 = CastlingData False False
+  | fromField == h8 = CastlingData False q
+updateCastlingRights _ (CastlingMove from to rookFrom rookTo) _ = CastlingData False False
+updateCastlingRights _ _ castlingRights = castlingRights
   
 pieceFieldForMove :: GameState -> Move -> PieceField
 pieceFieldForMove gs mv = head [pf | pf <- gs ^. gsPosition, mv ^. moveFrom == pf ^. pfField]
@@ -648,4 +656,3 @@ tryParsingMove mr gs stringMove = (,) <$> executedMove <*> (fmap snd parsedMove)
     
 gameFromStart :: MoveReader -> [String] -> Either String Game
 gameFromStart mr mvs = gameFromString mr startingGS mvs
-
