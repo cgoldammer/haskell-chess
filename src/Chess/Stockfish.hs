@@ -138,3 +138,5 @@ stockfishLineParser gs = do
     let move = stockfishMoveRead gs mvString
     return $ StockfishMove move pvNumber eval
 
+
+

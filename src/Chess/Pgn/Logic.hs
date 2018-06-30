@@ -274,19 +274,18 @@ data GameEvaluation = GameEvaluation { gameTags :: [PgnTag], gameMoveSummaries :
 filterForBlunders :: [MoveSummary] -> Int -> [MoveSummary]
 filterForBlunders = undefined
 
-gameSummaries :: Game -> IO [MoveSummary]
-gameSummaries g = do 
+gameSummaries :: Int -> Game -> IO [MoveSummary]
+gameSummaries evalTime g = do 
   let moves = gameMoves g
-  let gameStates = traceShow moves $ scanl move' (startingGameState g) moves
+  let gameStates = scanl move' (startingGameState g) moves
   print $ length gameStates
-  bestMoves <- bestStockfishMoves gameStates 
-  -- print ("gameSummaries" ++ (show bestMoves)) 
+  bestMoves <- bestStockfishMoves evalTime gameStates 
   let zipped = zip bestMoves (fmap Just moves ++ [Nothing])
   return $ gameEvalSummary [(mv, sfm, gs) | ((sfm, gs), mv) <- zipped]
 
-bestStockfishMoves:: [GameState] -> IO [(Maybe StockfishMove, GameState)]
-bestStockfishMoves states = do
-  bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) 100 1) states
+bestStockfishMoves:: Int -> [GameState] -> IO [(Maybe StockfishMove, GameState)]
+bestStockfishMoves evalTime states = do
+  bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) evalTime 1) states
   return $ zip bests states
 
 gameEvalSummary :: [(Maybe Move, Maybe StockfishMove, GameState)] -> [MoveSummary]
@@ -321,8 +320,8 @@ data MoveSummary = MoveSummary {
 , msFen :: String
 } deriving Show
 
-ms :: GameState -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
-ms gs mv mvBest eval evalBest = MoveSummary mvString mvBestString eval evalBest fen
+createMoveSummary :: GameState -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
+createMoveSummary gs mv mvBest eval evalBest = MoveSummary mvString mvBestString eval evalBest fen
   where color = gs ^. gsColor
         playedBest = mv == mvBest
         fen = gameStateToFen gs
@@ -336,7 +335,7 @@ withLag (x1:x2:rest) = (x1, x2) : withLag (x2 : rest)
 
 format :: (Maybe Move, StockfishMove, GameState) -> (Maybe Move, StockfishMove, GameState) -> Maybe (MoveSummary, GameState)
 format (Just mv, sf, gs) (_, sfAfter, _) = Just (mvs, gs)
-  where mvs = ms gs mv (sfMove sf) (sfEvaluation sfAfter) (sfEvaluation sf) 
+  where mvs = createMoveSummary gs mv (sfMove sf) (sfEvaluation sfAfter) (sfEvaluation sf) 
 format _ _ = Nothing
 
 formatBest :: [(Maybe Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]

@@ -10,6 +10,7 @@ import Control.Monad
 import Data.Maybe
 import Data.Either
 import qualified Data.Either.Combinators as EitherC
+import Data.Either (rights)
 import Data.List
 import Control.Applicative
 import qualified Turtle as Tu
@@ -54,7 +55,17 @@ testFindBest (psList, mvExpected, numExpectedLower, numExpectedHigher) = TestCas
 findMateTests = fmap testFindMate positionsMate
 findBestTests = fmap testFindBest positionsBest
 
+moveSummaryTest = TestCase $ do
+  let moves = ["e4", "e5", "Qh5", "Ke7", "Qg5"]
+  let game = head $ rights [gameFromStart pgnToMove moves]
+  summaries <- gameSummaries 50 game
+  assertEqual "A summary exists for each move" (length summaries) (length moves)
+  let lastSummary = last summaries
+  assertEqual "At the end, the best move is the mate" (msMoveBest lastSummary) ("Qxe5#")
+            
+
 stockfishTests = TestList [
     "find mate tests" ~: findMateTests
   , "find best tests" ~: findBestTests
+  , "the move summary works correctly" ~: moveSummaryTest
   ]
