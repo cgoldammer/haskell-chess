@@ -203,7 +203,7 @@ move gs piece mv = GameState newPosition newColor newCastlingRights newEnPassant
 
 updateCastling :: Color -> Move -> CastlingRights -> CastlingRights
 updateCastling White mv (PlayerData w b) = PlayerData (updateCastlingRights White mv w) b
-updateCastling Black mv (PlayerData w b) = PlayerData w (updateCastlingRights White mv w)
+updateCastling Black mv (PlayerData w b) = PlayerData w (updateCastlingRights Black mv b)
 
 -- |Based on a `GameState`, a piece and a move, return a new `GameState`.
 -- Conceptually, this is the central function for this library, because it encapsulates
@@ -252,6 +252,7 @@ updatePlayerCastlingData (CastlingData kBefore qBefore) (CastlingData kNow qNow)
 
 updateCastlingRights :: Color -> Move -> CastlingData Bool -> CastlingData Bool
 updateCastlingRights _ _ (CastlingData False False) = CastlingData False False
+updateCastlingRights _ (CastlingMove from to rookFrom rookTo) _ = CastlingData False False
 updateCastlingRights White (StandardMove fromField _) (CastlingData k q)
   | fromField == a1 = CastlingData k False
   | fromField == e1 = CastlingData False False
@@ -260,7 +261,6 @@ updateCastlingRights Black (StandardMove fromField _) (CastlingData k q)
   | fromField == a8 = CastlingData k False
   | fromField == e8 = CastlingData False False
   | fromField == h8 = CastlingData False q
-updateCastlingRights _ (CastlingMove from to rookFrom rookTo) _ = CastlingData False False
 updateCastlingRights _ _ castlingRights = castlingRights
   
 pieceFieldForMove :: GameState -> Move -> PieceField

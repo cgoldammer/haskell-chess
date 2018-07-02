@@ -2,7 +2,6 @@
 -- A PgnGame consists of both a `Game` and a list of game tags
 -- and it represents the full logic of the PGN in a structured format.
 
-
 module Chess.Pgn.Logic (
     pgnToMove, cleanPgn --, -- pgnAsMoves
   , PgnType (Standard, WithColumn, WithRow, WithBoth)
