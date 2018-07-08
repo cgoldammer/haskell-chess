@@ -11,10 +11,10 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , filterOutInCheck
             , parsePromotionPiece
             , move, move', updatePositionMove, tryMoves, movePiece
-            , isMate
+            , isMate, ownKingField
             , isChecking, isTaking, isLegalPawnMove
             , filterOutInCheckFull, checkInRoute, isCheckInRoute, gameStateRoutes, routeData, returnCheckingRoute
-            , inCheck
+            , inCheck, removeKing
             , pieceFields
             , pieceFieldForMove
             , parseFen, fenToGameState, gameStateToFen, fullFen
@@ -289,12 +289,17 @@ inCheck :: GameState -> Bool
 inCheck gs@(GameState ps color cr ept hm fm) = ownKingField gs `elem` opponentFields
   where opponentFields = fmap (view moveTo) $ allStandardMoves . invertGameStateColor $ gs
 
+removeKing :: GameState -> GameState
+removeKing gs@(GameState ps color cr ept hm fm) = GameState psNew color cr ept hm fm
+  where psNew = updatePosition ps kingFields []
+        kingFields = fmap _pfField $ filter (\pf -> _pfPiece pf == King && _pfColor pf == color) ps
+
 isChecking :: GameState -> Bool
 isChecking = inCheck . invertGameStateColor
             
 filterOutInCheckFull :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
 filterOutInCheckFull gs = filter notInCheck 
-    where notInCheck (piece, mv) = not $ isChecking $ updatePositionMove gs piece mv
+    where notInCheck (piece, mv) = not $ inCheck $ updatePositionMove gs piece mv
 
 ownKingField gs = head $ fmap (view pfField) $ filter ((==King) . view pfPiece) $ ownPieceFields gs
 
@@ -302,7 +307,7 @@ filterOutInCheck :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
 filterOutInCheck gs moves = legalKingMoves ++ filteredOtherMoves
   where (kingMoves, otherMoves) = partition (\(p, m) -> p == King) moves
         kingField = ownKingField gs
-        allOpponentControlledFields = allControllingFields $ invertGameStateColor gs
+        allOpponentControlledFields = allControllingFields $ invertGameStateColor $ removeKing gs
         filterControlling (_, m) = (m ^. moveTo) `notElem` allOpponentControlledFields
         legalKingMoves = filter filterControlling kingMoves
         routes = gameStateRoutes gs
@@ -657,3 +662,4 @@ tryParsingMove mr gs stringMove = (,) <$> executedMove <*> fmap snd parsedMove
     
 gameFromStart :: MoveReader -> [String] -> Either String Game
 gameFromStart mr = gameFromString mr startingGS
+

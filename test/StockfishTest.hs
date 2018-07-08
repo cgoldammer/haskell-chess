@@ -56,13 +56,12 @@ findMateTests = fmap testFindMate positionsMate
 findBestTests = fmap testFindBest positionsBest
 
 moveSummaryTest = TestCase $ do
-  let moves = ["e4", "e5", "Qh5", "Ke7", "Qg5"]
+  let moves = ["e4", "e5", "Qh5", "Ke7", "Qg5+"]
   let game = head $ rights [gameFromStart pgnToMove moves]
   summaries <- gameSummaries 50 game
   assertEqual "A summary exists for each move" (length summaries) (length moves)
   let lastSummary = last summaries
-  assertEqual "At the end, the best move is the mate" (msMoveBest lastSummary) ("Qxe5#")
-            
+  assertEqual "At the end, the best move is the mate" "Qxe5#" (msMoveBest lastSummary) 
 
 stockfishTests = TestList [
     "find mate tests" ~: findMateTests

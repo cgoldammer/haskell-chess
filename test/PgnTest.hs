@@ -227,6 +227,19 @@ moveListTests = [
   , "Moves that should fully parse: " ~: fmap testFullParse fullParse
   ]
 
+pgnsToConvert = [
+  "1.e4",
+  "1.f3 e5 2.g4 Qh4#",
+  "1.f4 e5 2.e4 Qh4+",
+  "1.e4 e5 2.Qh5 Ke7 3.Qxe5#"]
+
+doubleConvert :: String -> String
+doubleConvert pgn = (gamePgnFull . parsedPgnGame) game
+  where game = head $ rights [readSingleGame (Te.pack pgn)]
+
+pgnDoubleConvertTest pgn = pgn ~=? doubleConvert pgn
+pgnDoubleConvertTests = TestList $ fmap pgnDoubleConvertTest pgnsToConvert
+
 pgnParseTests = pgnEqualMoveTests ++ pgnSameGameAsMoveTests
 
 pgnTests = [
@@ -239,4 +252,5 @@ pgnTests = [
   , "Exporting PGN works correctly" ~: toPgnTests
   , "Exporting PGN Castling works correctly" ~: toPgnTestsCastles
   , "Exporting PGN Promotion works correctly" ~: toPgnTestsPromotes
+  , "A pgn should stay identical when converted to game and back" ~: pgnDoubleConvertTests
   ]

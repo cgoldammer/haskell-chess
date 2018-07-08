@@ -17,7 +17,7 @@ module Chess.Pgn.Logic (
   , eventParse, siteParse, fullTagParse
   , parseGameMoves, parseGameComponents, moveParser, bothMoveParser, sidelineParser
   , readSingleGame
-  , gameSummaries
+  , gameSummaries, gameSummariesFake
   , gamePgnMoves, gamePgnFull
   , createPgnMoves, expandMove
   , gameText, readGameText
@@ -41,7 +41,9 @@ import qualified Data.Text as Text (concat)
 import Data.Either.Combinators (rightToMaybe)
 import Filesystem.Path.CurrentOS (fromText)
 import Turtle (strict, input)
-import Debug.Trace (traceShow)
+import Debug.Trace (traceShow, trace)
+import Test.QuickCheck (generate, elements)
+import System.Random
 
 import Chess.Board
 import Chess.Logic
@@ -161,14 +163,15 @@ gamePgnFull :: Game -> String
 gamePgnFull = addNumbers . gamePgnMoves
 
 addNumbers :: [PgnMove] -> String
-addNumbers s = concat [ show num ++ "." ++ move | (num, move) <- zipped]
+addNumbers s = concat [ beginningSpace num ++ show num ++ "." ++ move | (num, move) <- zipped]
   where paired = splitPaired s
         range = [1..(length paired)]
         zipped = zip range paired
+        beginningSpace num = if num == 1 then "" else " "
         
 splitPaired s = splitIntoPairs s []
 
-splitIntoPairs (a:b:rest) accum = accum ++ ((a ++ " " ++ b ++ " ") : splitIntoPairs rest accum)
+splitIntoPairs (a:b:rest) accum = accum ++ ((a ++ " " ++ b) : splitIntoPairs rest accum)
 splitIntoPairs [a] accum = accum ++ [a]
 splitIntoPairs [] accum = accum
 
@@ -277,10 +280,35 @@ gameSummaries :: Int -> Game -> IO [MoveSummary]
 gameSummaries evalTime g = do 
   let moves = gameMoves g
   let gameStates = scanl move' (startingGameState g) moves
-  print $ length gameStates
   bestMoves <- bestStockfishMoves evalTime gameStates 
   let zipped = zip bestMoves (fmap Just moves ++ [Nothing])
   return $ gameEvalSummary [(mv, sfm, gs) | ((sfm, gs), mv) <- zipped]
+
+-- A companion function to `gameSummaries` that return fake data.
+-- This is used for testing.
+gameSummariesFake :: Int -> Game -> IO [MoveSummary]
+gameSummariesFake _ g = do 
+  let moves = gameMoves g
+  let gameStates = scanl move' (startingGameState g) moves
+  let zipped = zip gameStates moves
+  summaries <- mapM (uncurry getFakeSummary) zipped
+  return summaries
+
+randItem :: [a] -> IO a
+randItem = generate . elements
+
+-- Obtain a random move summary for the gamestate and move.
+getFakeSummary :: GameState -> Move -> IO MoveSummary
+getFakeSummary gs mv = do
+  let mvString = moveAsPgn gs mv
+  mvBest <- fmap snd $ randItem $ allNextLegalMoves gs 
+  let mvBestString = moveAsPgn gs mvBest
+  let evalRange = (-100, 100)
+  evalMove <- randomRIO evalRange
+  evalBest <- randomRIO evalRange
+  let fen = gameStateToFen gs
+  return $ MoveSummary mvString mvBestString (Right evalMove) (Right evalBest) fen
+
 
 bestStockfishMoves:: Int -> [GameState] -> IO [(Maybe StockfishMove, GameState)]
 bestStockfishMoves evalTime states = do

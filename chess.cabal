@@ -46,6 +46,7 @@ library
                      , MonadRandom
                      , either
                      , optparse-applicative
+                     , QuickCheck
   other-modules:       
   default-extensions:  OverloadedStrings
                      , FlexibleInstances
