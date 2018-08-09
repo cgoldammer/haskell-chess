@@ -13,7 +13,7 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
             , move, move', updatePositionMove, tryMoves, movePiece
             , isMate, ownKingField
             , isChecking, isTaking, isLegalPawnMove
-            , filterOutInCheckFull, checkInRoute, isCheckInRoute, gameStateRoutes, routeData, returnCheckingRoute
+            , filterOutInCheckFull, checkInRoute, gameStateRoutes, routeData, returnCheckingRoute
             , inCheck, removeKing
             , pieceFields
             , pieceFieldForMove
@@ -31,8 +31,8 @@ module Chess.Logic (allPhysicalMoves, allPiecePhysicalMoves
 
 import Debug.Trace (trace)
 import Data.Maybe (listToMaybe, fromJust, Maybe(..), catMaybes, isJust, isNothing)
-import Control.Lens (makeLenses, view, (^.), over)
-import Control.Monad (liftM2, join)
+import Control.Lens (makeLenses, view, (^.), over, each, both)
+import Control.Monad (liftM2, liftM4, join)
 import Control.Applicative (liftA2, (<|>), optional)
 import Data.String.Utils (replace)
 import Data.Char (toLower, toUpper)
@@ -168,7 +168,7 @@ getPositionChange gs piece move = (removePf ++ removeTaken, addPf)
 shiftFieldIntoOwnDirection :: Field -> Color -> Int -> Maybe Field
 shiftFieldIntoOwnDirection (Field column row) color number = Field <$> Just column <*> takenRow
   where rowNumber = rowInt row
-        rowChange = if color == White then (-number) else number
+        rowChange = number * rowChangeForColor color
         takenRow = intRow $ rowNumber + rowChange
 
 -- |Remove a certain field from the position
@@ -241,9 +241,12 @@ updateEnPassant gs mv@(StandardMove from@(Field fromC fromR) to@(Field toC toR))
       beforeField = liftM2 Field (Just fromC) beforeRow
 updateEnPassant gs _ = Nothing
 
+rowChangeForColor :: Color -> Int
+rowChangeForColor White = 1
+rowChangeForColor Black = -1
+
 nextRow :: Row -> Color -> Maybe Row
-nextRow r White = intRow $ rowInt r + 1
-nextRow r Black = intRow $ rowInt r - 1
+nextRow r color = intRow $ rowInt r + rowChangeForColor color
 
 -- |Update castling rights given the existing rights and flags for whether the current 
 -- move left the state the same. E.g. if I castle myself, then the flag would be False.
@@ -303,83 +306,113 @@ filterOutInCheckFull gs = filter notInCheck
 
 ownKingField gs = head $ fmap (view pfField) $ filter ((==King) . view pfPiece) $ ownPieceFields gs
 
+-- Given a `GameState`, this function removes all physically possible
+-- moves that would be illegal because they would leave the own king in check.
+-- Warning: This function is tricky, and it'd be much less code to simply use
+-- `isChecking` on the resulting `GameState`. However, doing so would be vastly
+-- slower.
+-- Here's why: In a given position, isChecking looks at all possible moves, and 
+-- sees whether the king is in them. Let's say that there are n possible moves.
+-- Then, to find all legal moves, we will need to calculate n^2 new gameStates
+-- (n for the initial move, and another n for each of them to see whether that
+-- GameState results in a check).
+-- In contrast, this method will have complexity of n+m, where m is the 
+-- number of possible ways in which a move can result in a check from the 
+-- starting position.
+-- The method works as follows:
+-- (1) What are the squares that the king can go to that are not controlled
+-- by opponent pieces? Moving to these squares is a legal move.
+-- (2) If it's a piece move:
+--   a) If the king is in check: Does the piece move interrupt the check?
+--   b) If the king is not in check: Is the piece pinned (moving the piece would create a check)?
+-- In both those cases, the move is illegal and filtered out.
 filterOutInCheck :: GameState -> [(Piece, Move)] -> [(Piece, Move)]
 filterOutInCheck gs moves = legalKingMoves ++ filteredOtherMoves
-  where (kingMoves, otherMoves) = partition (\(p, m) -> p == King) moves
+  where (kingMoves, pieceMoves) = partition (\(p, m) -> p == King) moves
         kingField = ownKingField gs
         allOpponentControlledFields = allControllingFields $ invertGameStateColor $ removeKing gs
         filterControlling (_, m) = (m ^. moveTo) `notElem` allOpponentControlledFields
         legalKingMoves = filter filterControlling kingMoves
         routes = gameStateRoutes gs
-        routeFilter (_, m) = not (isCheckInRoute m routes)
-        filteredOtherMoves = filter routeFilter otherMoves
-        
+        routeFilter (_, m) = not ((fmap any checkInRoute) m routes)
+        filteredOtherMoves = filter routeFilter pieceMoves
 
--- All opponent pieces that could possibly check the king in the current position,
--- assuming a piece moves.
-data CheckingRoute = CheckingRoute { routePiece :: PieceField, routeBetweenFields :: [Field], routeBetweenPiece :: Maybe PieceField, routeKingPosition :: Field} deriving Show
+-- In our approach, we want to find a small sufficient statistic that helps
+-- us determine whether the change in the position leads to a check. This is
+-- the `CheckingRoute`.
+data CheckingRoute = CheckingRoute { 
+  routePiece :: PieceField
+, routeBetweenFields :: [Field]
+, routeBetweenPiece :: Maybe PieceField
+, routeKingPosition :: Field} deriving Show
 
-checkInRoute :: CheckingRoute -> Move -> Bool
-checkInRoute cr mv = (not inCheck && creatingCheck) || (inCheck && not preventingCheck)
+checkInRoute :: Move -> CheckingRoute -> Bool
+checkInRoute mv (CheckingRoute piece betweenFields betweenPiece _) = (not inCheck && creatingCheck) || (inCheck && not preventingCheck)
   where creatingCheck = movingPieceInBetween && not pieceIsBetweenAfterMove && not takingPiece
         preventingCheck = inCheck && (pieceIsBetweenAfterMove || takingPiece)
-        takingPiece = to == routePiece cr ^. pfField
+        takingPiece = to == piece ^. pfField
         pieceIsBetweenAfterMove = to `elem` betweenFields
         (to, from) = (mv ^. moveTo, mv ^. moveFrom)
-        betweenFields = routeBetweenFields cr
-        betweenPiece = routeBetweenPiece cr
-        inCheck = isNothing $ routeBetweenPiece cr
+        inCheck = isNothing betweenPiece
         movingPieceInBetween = Just from == fmap (view pfField) betweenPiece
     
-isCheckInRoute :: Move -> [CheckingRoute] -> Bool
-isCheckInRoute mv = any $ flip checkInRoute mv
+type IsLine = Bool
 
--- A route goes either in row or column from the king position.
--- The maximum number of own pieces on it is 1
--- The first opponent piece on it must be able to check.
---
-
-routeData :: GameState -> ([PieceField], [PieceField], Field, [(Bool, [Field])])
+routeData :: GameState -> ([PieceField], [PieceField], Field, [(IsLine, [Field])])
 routeData gs = (own, opp, kingField, allMoves)
   where kingField = ownKingField gs
-        rookMoves = [(True, pf) | pf <- pieceFields (PieceField Rook White kingField)]
-        bishopMoves = [(False, pf) | pf <-  pieceFields (PieceField Bishop White kingField)]
-        allMoves = filter (not . null . snd) $ bishopMoves ++ rookMoves
-        own = ownPieceFields gs
-        opp = opponentPieceFields gs
+        pieceData = [(Rook, True), (Bishop, False)]
+        pieceMoves = [[(isLine, pf) | pf <- pieceFields (PieceField piece White kingField)] | (piece, isLine) <- pieceData]
+        allMoves = filter (not . null . snd) $ concat pieceMoves
+        (own, opp) = (ownPieceFields gs, opponentPieceFields gs)
 
 gameStateRoutes :: GameState -> [CheckingRoute]
 gameStateRoutes gs = catMaybes $ fmap (returnCheckingRoute own opp kingField) allMoves
   where (own, opp, kingField, allMoves) = routeData gs
 
--- go through the fields. For each field, accumulate the count of own and opponent pieces
--- Only look for rooks, bishops, and queens
--- Stop when own count > 1 or opponent count > 1
--- If opponent count == 0 at end, return Nothing
-returnCheckingRoute :: [PieceField] -> [PieceField] -> Field -> (Bool, [Field]) -> Maybe CheckingRoute
+-- Returns the checking routes. To do this, you need the king position, the 
+-- position of all own and oppoent fields, and a route (a list of fields).
+-- Then, we go through the fields and start counting both own and opponent pieces
+-- on those fields. If the first two pieces encountered are own pieces, then
+-- it's not a checking route. If there is no opponent piece in the route, then it's 
+-- also not a checking route.
+returnCheckingRoute :: [PieceField] -> [PieceField] -> Field -> (IsLine, [Field]) -> Maybe CheckingRoute
 returnCheckingRoute _ _ _ (_, []) = Nothing
-returnCheckingRoute own opp kingField (isLine, fields) = makeMaybe correct $ CheckingRoute firstOppPieceField beforeOpp firstOwnPieceField kingField
-  where (before, after) = span (fmap not isOpponentPiece) $ zip fields (fmap indicator fields)
-        (beforeOpp, afterOpp) = (fmap fst before, fmap fst after)
-        indicator = pieceIndicator ownFields oppFields
-        oppCount = length afterOpp
-        firstOpp = head afterOpp
-        hasOpp = oppCount > 0 && firstOpp `elem` oppFields
-        firstOppPieceField = head $ filter (\pf -> pf ^. pfField == firstOpp) opp
-        [ownFields, oppFields] = (fmap . fmap) (view pfField) [own, opp]
+returnCheckingRoute own opp kingField (isLine, fields) = liftM4 CheckingRoute opponentPiece fieldsBefore (Just firstOwnPieceField) (Just kingField)
+  where before = span (fmap not isOpponentPiece) $ zip fields pieceOwners
+        (beforeOpp, afterOpp) = (over both) (fmap fst) before
+        opponentPiece = routeOpponentPiece isLine opp (listToMaybe afterOpp)
+        (ownFields, oppFields) = (over both) (fmap (view pfField)) (own, opp)
+        fieldsBefore = routeBeforeFields own beforeOpp
+        pieceOwners = fmap (pieceOwner ownFields oppFields) fields
         ownFieldsInList = dropWhile (`notElem`beforeOpp) ownFields
-        firstOwnPiece = listToMaybe ownFieldsInList -- Maybe Field
-        ownPieceOnField f = listToMaybe $ filter ((==f) . view pfField) own -- Field -> Maybe PieceField
-        firstOwnPieceField = join $ fmap ownPieceOnField firstOwnPiece -- Maybe PieceField
+        ownPieceOnField f = listToMaybe $ filter ((==f) . view pfField) own
+        firstOwnPiece = listToMaybe ownFieldsInList
+        firstOwnPieceField = join $ fmap ownPieceOnField firstOwnPiece
+
+-- A helper to determine whether the condition for number of own pieces (at most one)
+-- is satisfied
+routeBeforeFields :: [PieceField] -> [Field] -> Maybe [Field]
+routeBeforeFields own beforeOpp = makeMaybe (numberOwnFieldsInBefore <= 1) beforeOpp
+  where numberOwnFieldsInBefore = length $ filter (\pf -> pf ^. pfField `elem` beforeOpp) own
+
+-- A helper to determined whether the condition for opponent pieces is satisfied:
+-- There must be an opponent piece, and it must be of the right type (e.g. if 
+-- we are searching over a line it must be a rook or queen).
+routeOpponentPiece :: IsLine -> [PieceField] -> Maybe Field -> Maybe PieceField
+routeOpponentPiece _ _ Nothing = Nothing
+routeOpponentPiece isLine opponentFields (Just opponentField) = makeMaybe oppPieceRightType firstOppPieceField
+  where 
         oppPiece = firstOppPieceField ^.pfPiece
+        firstOppPieceField = head $ filter (\pf -> pf ^. pfField == opponentField) opponentFields
         oppPieceRightType = (isLine && oppPiece `elem` [Rook, Queen]) || (not isLine && oppPiece `elem` [Bishop, Queen])
-        numberOwnFieldsInBefore = length $ filter (\pf -> pf ^. pfField `elem` beforeOpp) own
-        correct = hasOpp && oppPieceRightType && (numberOwnFieldsInBefore <= 1)
 
 isOpponentPiece (_, (own, opp)) = opp
 
-pieceIndicator :: [Field] -> [Field] -> Field -> (Bool, Bool)
-pieceIndicator own opp f = (f `elem` own, f `elem` opp)
+-- Given a set of own fields and opponent fields, tells us whether
+-- the field is in either set.
+pieceOwner :: [Field] -> [Field] -> Field -> (Bool, Bool)
+pieceOwner own opp f = (f `elem` own, f `elem` opp)
 
 type MoveDirections = [Move]
 
@@ -390,17 +423,12 @@ allControllingFields gs = nonPawnFields ++ pawnFields
         color = gs ^. gsColor
         pawnFields = concatMap (pawnTakingFields color . view pfField) pawns
 
+-- The fields that a pawn on a given square can move to if taking.
 pawnTakingFields :: Color -> Field -> [Field]
-pawnTakingFields color (Field col row) = catMaybes [left, right]
-  where rowChange = if color == White then 1 else (-1)
-        colNum = columnInt col
-        rowNum = rowInt row
-        newRowNum = rowNum + rowChange
-        newRow = intRow newRowNum
-        leftCol = intColumn (colNum - 1)
-        rightCol = intColumn (colNum + 1)
-        left = liftA2 Field leftCol newRow
-        right = liftA2 Field rightCol newRow
+pawnTakingFields color (Field col row) = catMaybes $ fmap (\col -> fmap (Field col) newRow) newCols
+  where colNum = columnInt col
+        newRow = nextRow row color
+        newCols = catMaybes $ fmap (\d -> intColumn (colNum + d)) [-1, 1]
 
 allControllingFieldsHelper :: GameState -> PieceField -> [Field]
 allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = fmap snd goodMoves
