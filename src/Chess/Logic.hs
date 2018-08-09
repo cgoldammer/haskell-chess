@@ -168,7 +168,7 @@ getPositionChange gs piece move = (removePf ++ removeTaken, addPf)
 shiftFieldIntoOwnDirection :: Field -> Color -> Int -> Maybe Field
 shiftFieldIntoOwnDirection (Field column row) color number = Field <$> Just column <*> takenRow
   where rowNumber = rowInt row
-        rowChange = number * rowChangeForColor color
+        rowChange = number * (-1) * rowChangeForColor color
         takenRow = intRow $ rowNumber + rowChange
 
 -- |Remove a certain field from the position
@@ -234,10 +234,10 @@ updateEnPassant gs mv@(StandardMove from@(Field fromC fromR) to@(Field toC toR))
   | pawnMovedTwo = beforeField 
   | otherwise = Nothing
   where
-      pawnMovedTwo = movedPawn && distance == 2 && fromC == toC
+      pawnMovedTwo = movedPawn && distance == 2
       movedPawn = movePiece gs mv == Pawn
       distance = moveDistance (from, to)
-      beforeRow = nextRow fromR (_gsColor gs)
+      beforeRow = nextRow fromR $ gs ^. gsColor
       beforeField = liftM2 Field (Just fromC) beforeRow
 updateEnPassant gs _ = Nothing
 
@@ -431,44 +431,45 @@ pawnTakingFields color (Field col row) = catMaybes $ fmap (\col -> fmap (Field c
         newCols = catMaybes $ fmap (\d -> intColumn (colNum + d)) [-1, 1]
 
 allControllingFieldsHelper :: GameState -> PieceField -> [Field]
-allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = fmap snd goodMoves
+allControllingFieldsHelper gs@(GameState position color _ _ _ _) pf@(PieceField piece _ field) = fmap snd $ goodMoveFilterPawn
     where fields = pieceFields pf
           withCount = fmap (opponentNum (fmap (view pfField) position)) fields
-          goodFields = concat $ fmap fst <$> fmap (takeWhile (\(_, c) -> c <= 1)) withCount
+          goodFields = concat $ fmap fst <$> fmap (takeWhile ((<=1) . snd)) withCount
           goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
           goodMoveFilterPawn = filterPawnMoves gs piece goodMoveFields
-          goodMoves = goodMoveFilterPawn
           
 allOpponentFields gs = fmap (view pfField) $ ownPieceFields $ invertGameStateColor gs
 
+doesPawnPromote :: Piece -> Field -> Color -> Bool
+doesPawnPromote Pawn field color = (field ^. fieldRow) == promotionRow
+  where promotionRow = if color == White then R7 else R2
+doesPawnPromote _ _ _ = False
+
 allStandardPhysicalMoves :: GameState -> PieceField -> [Move]
-allStandardPhysicalMoves gs pf@(PieceField piece _ field) = if pawnPromotes then promotionMoves else standardMoves
+allStandardPhysicalMoves gs pf@(PieceField piece _ field) = promotionMoves
   where fields = pieceFields pf
         withCount = fmap (opponentNum opponentFields) fields
         notOwn f = f `notElem` fmap (view pfField) (ownPieceFields gs)
         goodFields = concatMap (takeWhile notOwn) $ fmap fst <$> fmap (takeWhile (\(_, c) -> c <= 1)) withCount
         opponentFields = allOpponentFields gs
         goodMoveFields = [(from, to) | (from, to) <- zip (repeat field) goodFields] :: [MoveLocation]
-        completeGoodFields = if piece == Pawn then [ml | ml <- goodMoveFields, isLegalPawnMove gs ml] else goodMoveFields
-        promotionRow = if (gs ^. gsColor) == White then R7 else R2
-        pawnPromotes = (piece == Pawn) && ((field ^. fieldRow) == promotionRow)
-        standardMoves = fmap (moveFromFields gs piece) completeGoodFields
-        promotionMoves = concatMap addPromotionMoves completeGoodFields
+        completeGoodFields = filterPawnMoves gs piece goodMoveFields
+        pawnPromotes = doesPawnPromote piece field (gs ^. gsColor)
+        promotionMoves = concatMap (addPromotionMoves pawnPromotes gs piece) completeGoodFields
 
 moveFromFields :: GameState -> Piece -> (Field, Field) -> Move
 moveFromFields gs piece (from, to) = if isEp then EnPassantMove from to captureField else StandardMove from to
   where isEp = isEnPassant (_gsEnPassantTarget gs) piece (from, to)
         captureField = fromJust $ shiftFieldIntoOwnDirection to (gs ^. gsColor) 1
 
-        
-addPromotionMoves :: MoveLocation -> [Move]
-addPromotionMoves (from, to) = [PromotionMove from to piece | piece <- allNonKingFullPieces]
-
+addPromotionMoves :: Bool -> GameState -> Piece -> MoveLocation -> [Move]
+addPromotionMoves True gs piece (from, to) = [PromotionMove from to piece | piece <- allNonKingFullPieces]
+addPromotionMoves False gs piece (from, to) = [moveFromFields gs piece (from, to)]
 
 opponentCount :: Eq a => [a] -> [a] -> Int -> [(a, Int)]
 opponentCount fs [] n = zip fs (repeat n)
 opponentCount (f:rest) opfs n = (f, nextNum) : opponentCount rest opfs nextNum
-  where nextNum = if f `elem` opfs ||  n >= 1 then n + 1 else n
+  where nextNum = if f `elem` opfs || n >= 1 then n + 1 else n
 opponentCount [] _ _ = []
 
 opponentNum :: Eq a => [a] -> [a] -> [(a, Int)]
@@ -597,7 +598,6 @@ selectByPosition ps fs = filter (\pf -> (pf ^. pfField) `elem` fs) ps
 piecesOnField :: Position -> Field -> Maybe PieceField
 piecesOnField ps f = safeIndex 0 (filter byField ps)
     where   byField pf = pf ^. pfField == f
-
 
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
