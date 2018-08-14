@@ -18,14 +18,14 @@ import Chess.Helpers
 
 type Fen = String
 
+colorTransformer :: Color -> Char -> Char
+colorTransformer White = id
+colorTransformer Black = toLower
+
 pieceFieldFen :: Maybe PieceField -> Char
 pieceFieldFen Nothing = '1'
-pieceFieldFen (Just (PieceField piece color field)) = pieceChar
-    where   pieceChar = transformer pieceLetter
-            pieceLetter = head $ showPiece piece
-            transformer 
-                | color == White = id
-                | color == Black = toLower
+pieceFieldFen (Just (PieceField piece color field)) = colorTransformer color pieceLetter 
+    where   pieceLetter = head $ showPiece piece
 
 basicFenFromRow :: [PieceField] -> String
 basicFenFromRow ps = fmap (pieceFieldFen . firstPieceOnColumn ps) allColumns
@@ -56,7 +56,6 @@ fenStringToPosition s = catMaybes $ fmap stringToPieceField [p ++ f | (p, f) <- 
          expanded = concatMap asRepeated $ cleanFenString s
          pieceStrings = fmap fenPieceFormatter expanded
          collected = zip pieceStrings allFieldsForFen
-
 
 cleanFenString :: String -> String 
 cleanFenString = filter (not . (`elem` ("/"::String)))
@@ -116,7 +115,7 @@ castlingRightsChar True Black False = "q"
 castlingRightsChar False _ _ = ""
 
 firstPieceOnColumn :: Position -> Column -> Maybe PieceField
-firstPieceOnColumn ps c = safeIndex 0 (filter (\pf -> pf ^. pfField . fieldColumn == c) ps)
+firstPieceOnColumn ps c = safeIndex 0 $ filter ((==c) . _fieldColumn . _pfField) ps
 
 positionByRow :: Position -> [Position]
 positionByRow ps = fmap (piecesOnRow ps) (reverse allRows)
@@ -134,5 +133,5 @@ fenToGameState :: String -> Maybe GameState
 fenToGameState = rightToMaybe . parseOnly parseFen . pack
 
 piecesOnRow :: Position -> Row -> Position
-piecesOnRow ps r = filter (\pf -> pf ^. pfField . fieldRow == r) ps
+piecesOnRow ps r = filter ((==r) . _fieldRow . _pfField)  ps
 

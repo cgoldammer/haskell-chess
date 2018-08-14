@@ -72,7 +72,7 @@ renameCastles pgnMove _ = pgnMove
 
 possibleMoveFields :: GameState -> PgnMove -> [((Piece, Move), [String])]
 possibleMoveFields gs pgn = zip movesWithPiece pgnMoves
-    where   allMoves = filter ((==movePiece) . fst) $ allNextLegalMoves gs
+    where   allMoves = filter ((==movePiece) . fst) $ allLegalMoves gs
             pgnCleaned = renameCastles (filter filterMoves pgn) color -- PgnMove
             (pgnWithoutPromotion, promotionPiece) = pgnToPromotion pgnCleaned
             relevantMoves = filter (if isJust promotionPiece then isPromotionMove . snd else not . isPromotionMove. snd) allMoves
@@ -202,7 +202,7 @@ allOtherPgns gs mv = concatMap (uncurry (flip (expandMove gs))) allMovesWithPiec
         color = gs ^. gsColor
         from = mv ^. moveFrom
         pieceField = PieceField piece color from
-        allMoves = allNextLegalMoves gs
+        allMoves = allLegalMoves gs
         allMovesWithPieceFields = [(PieceField p color (m ^. moveFrom), m) | (p, m) <- allMoves, from /= m ^. moveFrom]
 
 -- | A PgnGame consists of both a `Game` and a list of game tags. It represents
@@ -301,7 +301,7 @@ randItem = generate . elements
 getFakeSummary :: GameState -> Move -> IO MoveSummary
 getFakeSummary gs mv = do
   let mvString = moveAsPgn gs mv
-  mvBest <- fmap snd $ randItem $ allNextLegalMoves gs 
+  mvBest <- fmap snd $ randItem $ allLegalMoves gs 
   let mvBestString = moveAsPgn gs mvBest
   let evalRange = (-100, 100)
   evalMove <- randomRIO evalRange

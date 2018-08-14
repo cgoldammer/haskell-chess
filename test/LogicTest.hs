@@ -70,7 +70,7 @@ nonMates = fmap toGameStateNoCastle $ catMaybes (fmap stringToPosition nonMatePo
 
 allNextFields = []
 movesTest expected ps = TestCase (assertBool errorMessage (movesCalculated == movesExpected))
-    where   movesCalculated = S.fromList $ allNextLegalMoves ps
+    where   movesCalculated = S.fromList $ allLegalMoves ps
             movesExpected = S.fromList expected
             errorMessage = "Position: " ++ show ps ++ " Expected: " ++ show movesExpected ++ " but got: " ++ show movesCalculated
 
@@ -111,7 +111,7 @@ pawnToFields :: GameState -> [Field]
 pawnToFields gs = fmap (view moveTo) $ pawnToMoves gs
 
 pawnToMoves :: GameState -> [Move]
-pawnToMoves gs = [mv | (_, mv) <- allNextLegalMoves gs, (mv ^. moveFrom) `elem` (getPositions gs Pawn)]
+pawnToMoves gs = [mv | (_, mv) <- allLegalMoves gs, (mv ^. moveFrom) `elem` (getPositions gs Pawn)]
 
 pawnTests = TestList [
     "white" ~: pawnTestWhite
@@ -127,7 +127,7 @@ gsCastleBoth = toGameState posCastleBoth
 testCastleBoth = TestCase $ assertEqual error (S.fromList movesExpected) intersection
     where error = "Both castling moves should be possible for white"
           intersection = intersect possible movesExpected
-          possible = allNextLegalMoves gsCastleBoth
+          possible = allLegalMoves gsCastleBoth
           movesExpected = catMaybes $ fmap (stringToMove gsCastleBoth) ["E1C1", "E1G1"]
 
 posCastleBothBlack = fromJust $ stringToPosition ["WKE1", "BKE8", "BKA8", "BRH8"]
@@ -136,7 +136,7 @@ gsCastleBothBlack = invertGameStateColor $ toGameState posCastleBothBlack
 testCastleBothBlack = TestCase $ assertEqual error (S.fromList movesExpected) intersection
     where error = "Both castling moves should be possible for black"
           intersection = intersect possible movesExpected
-          possible = allNextLegalMoves gsCastleBothBlack
+          possible = allLegalMoves gsCastleBothBlack
           movesExpected = catMaybes $ fmap (stringToMove gsCastleBothBlack) ["E8C8", "E8G8"]
 
 
@@ -166,9 +166,9 @@ testCastleSide cr mv = TestCase $ assertEqual error (S.fromList movesExpected) i
     where error = "Exactly one castle should be possible" ++ show gsCastleOne ++ " | All moves: " ++ show kingFields
           movesExpected = fmap snd $ catMaybes $ fmap (stringToMove gsCastleOne) [mv]
           gsCastleOne = gsWithCastling posCastleBoth White cr
-          possible = fmap snd $ allNextLegalMoves gsCastleOne
+          possible = fmap snd $ allLegalMoves gsCastleOne
           intersection = intersect possible movesExpected
-          kingFields = fmap ((view moveTo) . snd) $ filter (\m -> fst m == King) $ allNextLegalMoves gsCastleOne
+          kingFields = fmap ((view moveTo) . snd) $ filter (\m -> fst m == King) $ allLegalMoves gsCastleOne
 
 crKing = PlayerData (CastlingData True False) (CastlingData False False)
 crQueen = PlayerData (CastlingData False True) (CastlingData False False)
@@ -182,15 +182,15 @@ gsCastleQueen = toGameState posCastleBoth
 testCastleQueen = TestCase $ assertEqual error (S.fromList movesExpected) intersection
     where error = "Only queenside castle should be possible"
           intersection = intersect possible movesExpected
-          possible = fmap snd $ allNextLegalMoves gsCastleQueen
+          possible = fmap snd $ allLegalMoves gsCastleQueen
           movesExpected = fmap snd $ catMaybes $ fmap (stringToMove gsCastleQueen) ["E1C1"]
 
 testLosesRight mvs mvExpected = TestCase $ assertEqual error movesExpected difference
   where error = "Check that some castling rights are lost after moving: " ++ show mvs
         movesExpected = S.fromList $ catMaybes $ fmap (stringToMove gsCastleBoth) mvExpected
         difference = S.difference movesBefore movesAfter
-        movesAfter = S.fromList $ allNextLegalMoves newState
-        movesBefore = S.fromList $ allNextLegalMoves gsCastleBoth
+        movesAfter = S.fromList $ allLegalMoves newState
+        movesBefore = S.fromList $ allLegalMoves gsCastleBoth
         newState = newStateFromMoves gsCastleBoth mvs
 
 testsLosesRight = [
@@ -208,7 +208,7 @@ gsEp = stringToGs ["WKA1", "BKA8", "WPC2", "WPE2", "BPD4"]
 testEp mvs mvExpected error = TestCase $ assertEqual error (S.fromList movesExpected) intersection
   where movesExpected = catMaybes $ fmap (stringToMove newState) mvExpected -- [Move]
         intersection = intersect possible movesExpected
-        possible = filter (\mp -> fst mp == Pawn) $ allNextLegalMoves newState
+        possible = filter (\mp -> fst mp == Pawn) $ allLegalMoves newState
         newState = newStateFromMoves gsEp mvs
 
 testsEp = [
@@ -271,13 +271,13 @@ legalMoveTest gsString legalMoves = (S.fromList expected) ~=? actual
   where actual = intersect expected legal
         gs = stringToGs gsString
         expected = fmap (snd . fromJust . (stringToMove gs)) legalMoves
-        legal = fmap snd $ allNextLegalMoves gs
+        legal = fmap snd $ allLegalMoves gs
 
 
 illegalMoveTest gsString illegalMoves = expected ~=? actual
   where expected = fmap (snd . fromJust . (stringToMove gs)) illegalMoves
         gs = stringToGs gsString
-        legalMoves = fmap snd $ allNextLegalMoves gs
+        legalMoves = fmap snd $ allLegalMoves gs
         actual = filter (\m -> not (m `elem` legalMoves)) expected
 
 
