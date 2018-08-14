@@ -485,11 +485,11 @@ allPieceTargets gs pf opponentFields = goodFields
         goodFields = concatMap (takeWhile notOwn) $ fmap fst <$> fmap (takeWhile (\(_, c) -> c <= 1)) withCount
 
 addSpecialtyMoves :: IsAddingSpecialMoves -> GameState -> PieceField -> [MoveLocation] -> [Move]
-addSpecialtyMoves true gs (PieceField piece _ field) fields = movesWithPromotion ++ castMoves
+addSpecialtyMoves True gs (PieceField piece _ field) fields = movesWithPromotion ++ castMoves
   where movesWithPromotion = concatMap (turnFieldsToMove pawnPromotes gs piece) fields
         pawnPromotes = doesPawnPromote piece field (gs ^. gsColor)
         castMoves = if piece == King then possibleCastlingMoves gs else []
-addSpecialtyMoves false gs (PieceField piece _ _) fields = concatMap (turnFieldsToMove false gs piece) fields
+addSpecialtyMoves False gs (PieceField piece _ _) fields = concatMap (turnFieldsToMove False gs piece) fields
     
 
 moveFromFields :: GameState -> Piece -> (Field, Field) -> Move
