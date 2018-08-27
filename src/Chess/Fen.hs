@@ -18,14 +18,15 @@ import Chess.Helpers
 
 type Fen = String
 
-colorTransformer :: Color -> Char -> Char
-colorTransformer White = id
-colorTransformer Black = toLower
+colorTransformer :: Color -> Maybe Char -> Char
+colorTransformer White (Just c) = c
+colorTransformer Black (Just c) = toLower c
+colorTransformer _ Nothing = '1'
 
 pieceFieldFen :: Maybe PieceField -> Char
 pieceFieldFen Nothing = '1'
 pieceFieldFen (Just (PieceField piece color field)) = colorTransformer color pieceLetter 
-    where   pieceLetter = head $ showPiece piece
+    where   pieceLetter = safeHead $ showPiece piece
 
 basicFenFromRow :: [PieceField] -> String
 basicFenFromRow ps = fmap (pieceFieldFen . firstPieceOnColumn ps) allColumns

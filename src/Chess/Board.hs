@@ -73,12 +73,6 @@ showColor :: Color -> String
 showColor White = "W"
 showColor Black = "B"
 
-allColumnNames :: String
-allColumnNames = fmap (head . showColumn) allColumns
-
-allRowNames :: String
-allRowNames = fmap (head . showRow) allRows
-
 charColumn :: Char -> Maybe Column
 charColumn c = join $ fmap (`safeIndex`allColumns) (elemIndex c ['A'..'H'])
 

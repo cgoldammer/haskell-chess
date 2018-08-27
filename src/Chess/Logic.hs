@@ -5,7 +5,7 @@ module Chess.Logic (allPhysicalMoves, allPieceMoves
             , defaultGameState, defaultGameStateNoCastle
             , startingGS
             , getPositions
-            , invertGameStateColor
+            , invertGameStateColor, invertColor
             , ownPieceFields
             , allLegalMoves, opponentCount, opponentNum, allControllingFields
             , filterOutInCheck
@@ -16,7 +16,7 @@ module Chess.Logic (allPhysicalMoves, allPieceMoves
             , filterOutInCheckFull, checkInRoute, gameStateRoutes, routeData, returnCheckingRoute
             , inCheck, removeKing
             , pieceFields
-            , pieceFieldForMove
+            , moveDistance
             , parseFen, fenToGameState, gameStateToFen, fullFen
             , castlingRightsParser, freeForCastling
             , allOpponentMoves
@@ -266,9 +266,6 @@ updateCastlingRights Black (StandardMove fromField _) (CastlingData k q)
   | fromField == h8 = CastlingData False q
 updateCastlingRights _ _ castlingRights = castlingRights
   
-pieceFieldForMove :: GameState -> Move -> PieceField
-pieceFieldForMove gs mv = head [pf | pf <- gs ^. gsPosition, mv ^. moveFrom == pf ^. pfField]
-
 invertGameStateColor :: GameState -> GameState
 invertGameStateColor = over gsColor invertColor
 
@@ -628,6 +625,7 @@ piecesOnField :: Position -> Field -> Maybe PieceField
 piecesOnField ps f = safeIndex 0 (filter byField ps)
     where   byField pf = pf ^. pfField == f
 
+moveDistance :: (Field, Field) -> Int
 moveDistance (from, to) = abs (fromX - toX) + abs (fromY - toY)
     where (fromX, fromY) = fieldToInt from
           (toX, toY) = fieldToInt to

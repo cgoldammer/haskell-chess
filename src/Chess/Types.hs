@@ -1,6 +1,6 @@
 module Chess.Types where
 
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, catMaybes)
 import Data.List (elemIndex)
 import Chess.Helpers
 import Control.Lens (makeLenses)
@@ -72,10 +72,10 @@ showColumn :: Column -> String
 showColumn c = [['A'..'H'] !! (columnInt c - 1)]
 
 allColumnNames :: String
-allColumnNames = fmap (head . showColumn) allColumns
+allColumnNames = catMaybes $ fmap (safeHead . showColumn) allColumns
 
 allRowNames :: String
-allRowNames = fmap (head . showRow) allRows
+allRowNames = catMaybes $ fmap (safeHead . showRow) allRows
 
 showRow :: Row -> String
 showRow r = show $ rowInt r
