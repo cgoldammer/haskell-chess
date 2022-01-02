@@ -46,8 +46,8 @@ testFindBest (psList, mvExpected, numExpectedLower, numExpectedHigher) = TestCas
   let fen = fullFen . fromJust . stringToPosition $ psList
   let gs = fromJust $ fenToGameState fen
   let (_, moveExpected) = fromJust . (stringToMove gs) $ mvExpected
-  mvs <- bestMoves fen 1000 1
-  let sfm@(StockfishMove mv _ eval) = mvs !! 0
+  mvs <- bestMoves fen 1000 1 1
+  let sfm@(StockfishMove mv _ _ eval) = mvs !! 0
   mv @?= moveExpected
   sortMove sfm > numExpectedLower @? "Expected evaluation bigger than: " ++ show numExpectedLower ++ show sfm
   sortMove sfm < numExpectedHigher @? "Expected evaluation smaller than: " ++ show numExpectedHigher ++ show sfm

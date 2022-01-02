@@ -307,18 +307,17 @@ getFakeSummary gs mv = do
   evalMove <- randomRIO evalRange
   evalBest <- randomRIO evalRange
   let fen = gameStateToFen gs
-  return $ MoveSummary mvString mvBestString (Right evalMove) (Right evalBest) fen
+  return $ MoveSummary mvString mvBestString (Right evalMove) (Right evalBest) fen 0
 
 
-bestStockfishMoves:: Int -> [GameState] -> IO [(Maybe StockfishMove, GameState)]
+bestStockfishMoves:: Int -> [GameState] -> IO [(Maybe FullMoveStats, GameState)]
 bestStockfishMoves evalTime states = do
-  bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) evalTime 1) states
+  bests <- mapM (\gs -> singleBestMove (gameStateToFen gs) evalTime) states
   return $ zip bests states
 
-gameEvalSummary :: [(Maybe Move, Maybe StockfishMove, GameState)] -> [MoveSummary]
+gameEvalSummary :: [(Maybe Move, Maybe FullMoveStats, GameState)] -> [MoveSummary]
 gameEvalSummary summ = fmap fst $ formatBest $ keepOnlyJust summ
-
-keepOnlyJust summ = (\(m, sfm, gs) -> (m, fromJust sfm, gs)) <$> Data.List.takeWhile (\(_, sfm, gs) -> isJust sfm) summ
+  where keepOnlyJust summ = (\(m, sfm, gs) -> (m, fromJust sfm, gs)) <$> Data.List.takeWhile (\(_, sfm, gs) -> isJust sfm) summ
 
 tagSummary :: PgnTag -> Maybe String
 tagSummary (PgnWhite player) = Just $ lastName player
@@ -345,10 +344,11 @@ data MoveSummary = MoveSummary {
 , evalMove :: Evaluation
 , evalBest :: Evaluation
 , msFen :: String
+, complexityGB :: Int
 } deriving Show
 
-createMoveSummary :: GameState -> Move -> Move -> Evaluation -> Evaluation -> MoveSummary
-createMoveSummary gs mv mvBest eval evalBest = MoveSummary mvString mvBestString eval evalBest fen
+createMoveSummary :: GameState -> Move -> Move -> Evaluation -> Evaluation -> Int -> MoveSummary
+createMoveSummary gs mv mvBest eval evalBest complexityGB = MoveSummary mvString mvBestString eval evalBest fen complexityGB
   where color = gs ^. gsColor
         playedBest = mv == mvBest
         fen = gameStateToFen gs
@@ -360,10 +360,12 @@ withLag [] = []
 withLag [_] = []
 withLag (x1:x2:rest) = (x1, x2) : withLag (x2 : rest)
 
-format :: (Maybe Move, StockfishMove, GameState) -> (Maybe Move, StockfishMove, GameState) -> Maybe (MoveSummary, GameState)
-format (Just mv, sf, gs) (_, sfAfter, _) = Just (mvs, gs)
-  where mvs = createMoveSummary gs mv (sfMove sf) (sfEvaluation sfAfter) (sfEvaluation sf) 
+format :: (Maybe Move, FullMoveStats, GameState) -> (Maybe Move, FullMoveStats, GameState) -> Maybe (MoveSummary, GameState)
+format (Just mv, msBefore, gs) (_, msAfter, _) = Just (mvs, gs)
+  where mvs = createMoveSummary gs mv (sfMove sfBefore) (sfEvaluation sfAfter) (sfEvaluation sfBefore) (msComplexityGuidBratko msBefore)
+        sfBefore = msSf msBefore
+        sfAfter = msSf msAfter
 format _ _ = Nothing
 
-formatBest :: [(Maybe Move, StockfishMove, GameState)] -> [(MoveSummary, GameState)]
+formatBest :: [(Maybe Move, FullMoveStats, GameState)] -> [(MoveSummary, GameState)]
 formatBest = catMaybes . fmap (uncurry format) . withLag 
