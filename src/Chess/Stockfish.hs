@@ -17,6 +17,7 @@ import Data.Maybe (catMaybes, fromJust, listToMaybe)
 import Data.Text (Text, pack, splitOn, isInfixOf)
 import Turtle (cd, shell, strict, input)
 import Data.Either.Combinators (rightToMaybe)
+import System.FilePath (FilePath)
 
 type Fen = String
 type MateMove = (Move, Int)
@@ -24,10 +25,12 @@ type MateMove = (Move, Int)
 quoteString :: String -> String
 quoteString s = "'" ++ s ++ "'"
 
+scriptsFolder = "/home/cg/code/haskell-chess/scripts/"
+
 -- Return a list of the best n moves
 bestMoves :: Fen -> Int -> Int -> Int -> IO [StockfishMove]
 bestMoves fen moveTime numberPV numberDepths = do
-  cd "/home/cg/haskell-chess/scripts/"
+  cd scriptsFolder
   let arguments = fmap quoteString [fen, show moveTime, show numberPV]
   let gs = fromJust $ fenToGameState fen
   let color = gs ^. gsColor
@@ -65,7 +68,7 @@ singleBestMove fen moveTime = do
 
 resultLines :: Int -> IO [Text]
 resultLines number = do
-  cd "/home/cg/haskell-chess/scripts/"
+  cd scriptsFolder
   results :: Text <- strict $ input "./results.txt"
   let lines =  splitOn "\n" results
   let filt t = not $ pack "upperbound" `isInfixOf` t
